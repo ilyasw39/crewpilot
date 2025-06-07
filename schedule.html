@@ -1,0 +1,1537 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Schedule - CrewPilot</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary: #00adb5;
+        --primary-light: #eef2ff;
+        --background: #ffffff;
+        --text: #111827;
+        --gray: #6b7280;
+        --radius: 14px;
+        font-size: 16px;
+      }
+      body.dark {
+        --background: #1e1e2f;
+        --text: #f3f4f6;
+        --gray: #9ca3af;
+        --primary-light: #2c2e3a;
+      }
+      body.dark .fc {
+        --fc-page-bg-color: #1e1e2f;
+        --fc-neutral-bg-color: #2c2e3a;
+        --fc-neutral-text-color: #e5e7eb;
+        --fc-border-color: #3f3f46;
+        --fc-button-bg-color: #00adb5;
+        --fc-button-text-color: white;
+        --fc-button-hover-bg-color: #009aa4;
+        --fc-event-bg-color: #00adb5;
+        --fc-event-border-color: #009aa4;
+        --fc-event-text-color: #ffffff;
+      }
+      body.dark #calendar {
+        background: #1e1e2f !important;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: var(--background);
+        color: var(--text);
+        min-height: 100vh;
+        transition: background 0.3s ease, color 0.3s ease;
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-image: linear-gradient(
+            to right,
+            rgba(0, 0, 0, 0.08) 2px,
+            transparent 2px
+          ),
+          linear-gradient(to bottom, rgba(0, 0, 0, 0.08) 2px, transparent 2px);
+        background-size: 140px 140px;
+        z-index: -1;
+      }
+      header {
+        padding: 1rem 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: var(--primary-light);
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .logo img {
+        max-height: 42px;
+        cursor: pointer;
+      }
+      nav {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+      nav a {
+        text-decoration: none;
+        font-weight: 600;
+        color: var(--text);
+      }
+      nav a:hover {
+        color: var(--primary);
+      }
+      .logout {
+        background: var(--primary);
+        color: white;
+        padding: 0.4rem 0.8rem;
+        border-radius: var(--radius);
+      }
+      .settings-toggle button {
+        background: none;
+        border: none;
+        font-size: 1.3rem;
+        color: var(--text);
+        cursor: pointer;
+      }
+      .settings-toggle button:hover {
+        transform: rotate(180deg);
+      }
+      .settings-panel {
+        position: fixed;
+        top: 70px;
+        right: 20px;
+        background: var(--primary-light);
+        padding: 0.8rem;
+        border-radius: var(--radius);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        display: none;
+        flex-direction: column;
+        gap: 0.4rem;
+        z-index: 20;
+      }
+      .settings-panel.active {
+        display: flex;
+      }
+      main {
+        padding: 2rem;
+        max-width: 1200px;
+        margin: auto;
+      }
+      h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 1.2rem;
+      }
+      #calendar {
+        background: white;
+        padding: 1.5rem;
+        border-radius: var(--radius);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        min-height: 700px;
+      }
+      .button {
+        background: var(--primary);
+        color: white;
+        padding: 0.6rem 1.2rem;
+        border: none;
+        border-radius: var(--radius);
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s ease;
+      }
+      .button:hover {
+        background: #007b80;
+      }
+      .weekly-hours {
+        margin-top: 2.5rem;
+        background: var(--primary-light);
+        padding: 1.5rem 2rem;
+        border-radius: var(--radius);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+      }
+
+      .weekly-hours h2 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 1rem;
+      }
+      #weeklyHoursSection {
+        margin-top: 2rem;
+        background: var(--primary-light);
+        padding: 1.5rem 2rem;
+        border-radius: var(--radius);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        transition: background 0.3s ease, color 0.3s ease;
+      }
+
+      #weeklyHoursSection h2 {
+        font-size: 1.6rem;
+        font-weight: 700;
+        margin-bottom: 1rem;
+        color: var(--text);
+      }
+
+      #weeklyHoursList {
+        list-style: none;
+        padding-left: 0;
+        margin: 0;
+      }
+
+      #weeklyHoursList li {
+        padding: 0.8rem 1.2rem;
+        background-color: white;
+        margin-bottom: 0.6rem;
+        border-radius: var(--radius);
+        font-weight: 500;
+        color: var(--text);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      body.dark #weeklyHoursList li {
+        background-color: #2c2e3a;
+        color: #f3f4f6;
+      }
+
+      .ball-decoration {
+        position: absolute;
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle at 30% 30%,
+          var(--primary),
+          var(--gray)
+        );
+        opacity: 0.2;
+        z-index: -1;
+        animation: float 8s ease-in-out infinite;
+      }
+
+      .ball-decoration:nth-child(1) {
+        top: 10%;
+        left: 5%;
+        animation-delay: 0s;
+      }
+
+      .ball-decoration:nth-child(2) {
+        top: 60%;
+        right: 8%;
+        animation-delay: 1s;
+        width: 80px;
+        height: 80px;
+      }
+
+      .ball-decoration:nth-child(3) {
+        bottom: 15%;
+        left: 15%;
+        animation-delay: 2s;
+        width: 60px;
+        height: 60px;
+      }
+
+      .ball-decoration:nth-child(4) {
+        bottom: 5%;
+        right: 20%;
+        animation-delay: 3s;
+        width: 120px;
+        height: 120px;
+      }
+
+      .ball-decoration:nth-child(5) {
+        top: 30%;
+        left: 40%;
+        animation-delay: 4s;
+        width: 70px;
+        height: 70px;
+      }
+
+      .ball-decoration:nth-child(6) {
+        top: 10%;
+        right: 10%;
+        animation-delay: 5s;
+        width: 90px;
+        height: 90px;
+      }
+
+      .ball-decoration:nth-child(7) {
+        bottom: 20%;
+        left: 30%;
+        animation-delay: 6s;
+        width: 110px;
+        height: 110px;
+      }
+
+      .ball-decoration:nth-child(8) {
+        bottom: 10%;
+        right: 5%;
+        animation-delay: 7s;
+        width: 50px;
+        height: 50px;
+      }
+
+      .ball-decoration:nth-child(9) {
+        top: 50%;
+        left: 10%;
+        animation-delay: 8s;
+        width: 110px;
+        height: 110px;
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0) rotate(0deg);
+        }
+        50% {
+          transform: translateY(-20px) rotate(5deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Ball Decorations -->
+    <div id="ballContainer">
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+    </div>
+    <header>
+      <div class="logo" onclick="location.href='main.html'">
+        <img src="/images/plane_blue_nobg.png" alt="CrewPilot Logo" />
+      </div>
+      <nav>
+        <a onclick="logout()" class="logout">Logout</a>
+        <a href="schedule.html">Schedule</a>
+        <a href="team.html">Team</a>
+        <a href="store.html">Store Info</a>
+        <div class="settings-toggle">
+          <button onclick="toggleSettings()">
+            <i class="fas fa-cog"></i>
+          </button>
+        </div>
+      </nav>
+    </header>
+
+    <div class="settings-panel" id="settingsPanel">
+      <label>
+        <input type="checkbox" id="darkModeToggle" onchange="toggleTheme()" />
+        Dark Mode
+      </label>
+      <label>
+        <input type="checkbox" id="ballsToggle" onchange="toggleBalls()" />
+        Floating Balls
+      </label>
+    </div>
+
+    <main>
+      <h1>Weekly Schedule</h1>
+      <div style="margin-bottom: 1rem">
+        <label for="assignEmpSelect"><strong>Assign Shift To:</strong></label>
+        <select
+          id="assignEmpSelect"
+          style="margin-left: 0.5rem; padding: 0.6rem; font-size: 1.1rem"
+        >
+          <option value="">-- Select Employee --</option>
+        </select>
+        <br /><br />
+        <label
+          ><strong>Date:</strong> <input type="date" id="shiftDateInput"
+        /></label>
+        <label style="margin-left: 1rem"
+          ><strong>Start Time:</strong> <input type="time" id="startTimeInput"
+        /></label>
+        <label style="margin-left: 1rem"
+          ><strong>End Time:</strong> <input type="time" id="endTimeInput"
+        /></label>
+        <br /><br />
+        <!-- Unified Button Row -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
+          <!-- Left Side: Assign & Generate -->
+          <div style="display: flex; gap: 1rem;">
+            <button class="button" onclick="assignShift()">Assign Shift</button>
+            <button class="button" onclick="generateSchedule()">Generate Schedule</button>
+          </div>
+
+          <!-- Right Side: WhatsApp Buttons -->
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <button class="button" id="toggleWhatsAppBtn" onclick="toggleWhatsAppInput()">
+            <i class="fab fa-whatsapp"></i> Send via WhatsApp
+          </button>            
+          <div id="whatsappContainer" style="display: none; flex-direction: row; align-items: center; gap: 0.5rem;">
+              <input
+                type="text"
+                id="whatsappNumber"
+                placeholder="Enter number (Optional)"
+                style="padding: 0.5rem; font-size: 1rem; width: 210px;"
+              />
+              <button class="button" onclick="sendWhatsApp(true)">
+                <i class="fab fa-whatsapp"></i> Send Schedule
+              </button>            
+            </div>
+          </div>
+        </div>
+
+
+      <div id="calendar" class="fc fc-theme-standard"></div>
+
+      <!-- Template Management Button -->
+      <div style="margin-top: 2rem; text-align: center;">
+        <button class="button" onclick="openTemplateManager()" style="font-size: 1.1rem; padding: 0.8rem 1.5rem;">
+          <i class="fas fa-calendar-alt" style="margin-right: 0.5rem;"></i>Manage Schedule Templates
+        </button>
+      </div>
+
+      <!-- Template Manager Modal -->
+      <div id="templateManagerModal" class="popup">
+        <div class="popup-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto; background: var(--background);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0; font-size: 1.5rem;">Schedule Templates</h3>
+          </div>
+
+          <div style="background: var(--primary-light); padding: 1.5rem; border-radius: var(--radius); margin-bottom: 1.5rem;">
+            <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+              <select id="templateSelect" style="padding: 0.8rem; border-radius: var(--radius); min-width: 250px; font-size: 1rem; background: white;">
+                <option value="">Select Template</option>
+              </select>
+              <button class="button" onclick="editSelectedTemplate()" style="background: var(--primary);">
+                <i class="fas fa-edit" style="margin-right: 0.5rem;"></i>Edit
+              </button>
+              <button class="button" onclick="applyTemplate()" style="background: var(--primary);">
+                <i class="fas fa-check" style="margin-right: 0.5rem;"></i>Apply
+              </button>
+              <button class="button" onclick="deleteTemplate()" style="background: #dc2626;">
+                <i class="fas fa-trash" style="margin-right: 0.5rem;"></i>Delete
+              </button>
+            </div>
+          </div>
+
+          <div style="text-align: center; margin-bottom: 1.5rem;">
+            <button class="button" onclick="openTemplateDesigner()" style="background: var(--primary); font-size: 1.1rem; padding: 0.8rem 1.5rem;">
+              <i class="fas fa-plus" style="margin-right: 0.5rem;"></i>Create New Template
+            </button>
+          </div>
+
+          <button class="button cancel" onclick="closeTemplateManager()" style="width: 100%;">Close</button>
+        </div>
+      </div>
+
+      <!-- Template Designer Modal -->
+      <div id="templateDesignerModal" class="popup" style="z-index: 1000; display: none;">
+        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); z-index: 999;"></div>
+        <div class="popup-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto; background: var(--background); position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; border-radius: var(--radius); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); z-index: 1000;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding: 1.5rem; border-bottom: 1px solid var(--gray);">
+            <h3 id="templateDesignerTitle" style="margin: 0; font-size: 1.5rem;">Design Schedule Template</h3>
+            <button class="button cancel" onclick="closeTemplateDesigner()">
+              <i class="fas fa-times" style="margin-right: 0.5rem;"></i>Cancel
+            </button>
+          </div>
+
+          <form id="templateForm" onsubmit="return false;" style="padding: 1.5rem;">
+            <div style="background: var(--primary-light); padding: 1.5rem; border-radius: var(--radius); margin-bottom: 1.5rem;">
+              <input type="text" id="templateName" placeholder="Template Name" required 
+                     style="width: 100%; padding: 0.8rem; font-size: 1.1rem; border-radius: var(--radius); border: 2px solid transparent;"/>
+            </div>
+            
+            <div id="templateDays" style="display: grid; gap: 1rem;">
+            </div>
+
+            <div style="margin-top: 1.5rem; text-align: center;">
+              <button type="button" class="button" onclick="saveTemplate()" style="font-size: 1.1rem; padding: 0.8rem 2rem;">
+                <i class="fas fa-save" style="margin-right: 0.5rem;"></i>Save Template
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <section id="weeklyHoursSection">
+        <h2 id="weeklyHoursHeader">Weekly Hours Per Employee</h2>
+        <ul id="weeklyHoursList"></ul>
+      </section>
+
+      <div
+        id="legend"
+        style="
+          margin-top: 3rem;
+          background: var(--primary-light);
+          border-radius: var(--radius);
+          padding: 1rem;
+          font-size: 0.95rem;
+          color: var(--text);
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        "
+      >
+        <h3 style="margin-bottom: 0.8rem; font-size: 1.2rem">
+          Keyboard Shortcuts
+        </h3>
+        <ul
+          style="
+            list-style: none;
+            padding-left: 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+          "
+        >
+          <li>
+            <strong>Backspace</strong> – Delete selected shift or selected
+            date's shifts
+          </li>
+          <li>
+            <strong>D</strong> – Duplicate selected shift (moves it 15 minutes
+            forward)
+          </li>
+          <li>
+            <strong>R</strong> – Reassign selected shift to a different employee
+          </li>
+          <li><strong>Click a date</strong> – Select a day to assign shift</li>
+          <li><strong>Click a shift</strong> – Select a shift to act on</li>
+        </ul>
+      </div>
+    </main>
+
+    <div
+      id="reassignModal"
+      style="
+        position: fixed;
+        top: 30%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: white;
+        padding: 20px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        border-radius: 12px;
+        display: none;
+        z-index: 999;
+      "
+    >
+      <label
+        for="reassignDropdown"
+        style="font-weight: bold; display: block; margin-bottom: 10px"
+      >
+        Reassign shift to:
+      </label>
+      <select id="reassignDropdown" style="padding: 8px; font-size: 1rem">
+        <option value="">-- Select Employee --</option>
+      </select>
+      <div style="margin-top: 15px">
+        <button onclick="confirmReassign()" style="margin-right: 10px">
+          Confirm
+        </button>
+        <button onclick="closeReassignModal()">Cancel</button>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+    <script>
+      let selectedDates = [];
+      const user = JSON.parse(localStorage.getItem("loggedInUser"));
+
+      if (!user) {
+        // Redirect to login if no one is logged in
+        window.location.href = "login.html";
+      } else if (user.role !== "owner") {
+        alert("Access denied. Employees can't edit the schedule.");
+        window.location.href = "availability.html";
+      }
+
+      let selectedEvent = null;
+      let selectedDate = null;
+      const employees = JSON.parse(localStorage.getItem("crewEmployees")) || [];
+      let storeInfo = {};
+      window.addEventListener("load", () => {
+        storeInfo = JSON.parse(localStorage.getItem("storeInfo")) || {};
+      });
+      let calendar;
+
+      document.addEventListener("DOMContentLoaded", function () {
+        const calendarEl = document.getElementById("calendar");
+        calendar = new FullCalendar.Calendar(calendarEl, {
+          initialView: "timeGridWeek",
+          headerToolbar: {
+            left: "prev,next today",
+            center: "title",
+            right: "timeGridWeek,dayGridMonth",
+          },
+          nowIndicator: true,
+          editable: true,
+          selectable: true,
+          select: function (info) {
+            selectedDates = [];
+            const current = new Date(info.start);
+            while (current < info.end) {
+              selectedDates.push(new Date(current));
+              current.setDate(current.getDate() + 1);
+            }
+          },
+          events: [],
+          viewDidMount: function () {
+            showWeeklyHours();
+          },
+          eventClick: function (info) {
+            if (selectedEvent) {
+              selectedEvent.setProp("borderColor", "");
+            }
+            selectedEvent = info.event;
+            selectedEvent.setProp("borderColor", "#ff0000");
+            updateDurationLabel(selectedEvent);
+          },
+          dateClick: function (info) {
+            selectedDate = info.date;
+          },
+          slotDuration: "00:15:00",
+          slotMinTime: "09:00:00",
+          slotMaxTime: "24:00:00",
+          themeSystem: "standard",
+          eventResize: function (info) {
+            updateDurationLabel(info.event);
+            saveScheduledEvents();
+            showWeeklyHours();
+          },
+          eventDrop: function (info) {
+            updateDurationLabel(info.event);
+            saveScheduledEvents();
+            showWeeklyHours();
+          },
+        });
+        calendar.render();
+
+        calendar.on("datesSet", () => {
+          showWeeklyHours();
+        });
+
+        const savedEvents =
+          JSON.parse(localStorage.getItem("scheduledShifts")) || [];
+        savedEvents.forEach((event) => {
+          calendar.addEvent({
+            title: event.title,
+            start: event.start,
+            end: event.end,
+          });
+        });
+
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "Backspace") {
+            if (selectedEvent) {
+              selectedEvent.remove();
+              selectedEvent = null;
+              saveScheduledEvents();
+              showWeeklyHours();
+            } else if (selectedDates.length > 0) {
+              const eventsToRemove = calendar
+                .getEvents()
+                .filter((event) =>
+                  selectedDates.some(
+                    (date) =>
+                      event.start.toDateString() === date.toDateString() ||
+                      event.end.toDateString() === date.toDateString()
+                  )
+                );
+              eventsToRemove.forEach((event) => event.remove());
+              selectedDates = [];
+              saveScheduledEvents();
+              showWeeklyHours();
+            }
+          }
+
+          if (e.key === "d" && selectedEvent) {
+            const start = new Date(
+              selectedEvent.start.getTime() + 15 * 60 * 1000
+            );
+            const end = new Date(selectedEvent.end.getTime() + 15 * 60 * 1000);
+            calendar.addEvent({
+              title: selectedEvent.title,
+              start: start.toISOString(),
+              end: end.toISOString(),
+            });
+            saveScheduledEvents();
+          }
+
+          if (e.key === "r" && selectedEvent) {
+            const dropdown = document.getElementById("reassignDropdown");
+            dropdown.innerHTML =
+              '<option value="">-- Select Employee --</option>';
+            employees.forEach((emp) => {
+              const option = document.createElement("option");
+              option.value = emp.name;
+              option.textContent = emp.name;
+              dropdown.appendChild(option);
+            });
+            document.getElementById("reassignModal").style.display = "block";
+          }
+        });
+      });
+
+      const empSelect = document.getElementById("assignEmpSelect");
+      employees.forEach((emp, index) => {
+        const option = document.createElement("option");
+        option.value = index;
+        option.textContent = emp.name;
+        empSelect.appendChild(option);
+      });
+
+      function assignShift() {
+        const selectedIndex = empSelect.value;
+        if (selectedIndex === "") {
+          alert("Please select an employee.");
+          return;
+        }
+        const emp = employees[selectedIndex];
+
+        // Optional inputs
+        const dateInput = document.getElementById("shiftDateInput").value;
+        const startInput = document.getElementById("startTimeInput").value;
+        const endInput = document.getElementById("endTimeInput").value;
+
+        let startTime, endTime;
+
+        if (dateInput && startInput && endInput) {
+          startTime = new Date(`${dateInput}T${startInput}`);
+          endTime = new Date(`${dateInput}T${endInput}`);
+          if (endTime <= startTime) {
+            alert("End time must be after start time.");
+            return;
+          }
+        } else {
+          if (!selectedDate) {
+            alert(
+              "Please click on a date in the calendar to assign the shift."
+            );
+            return;
+          }
+          startTime = new Date(selectedDate);
+          startTime.setHours(9, 45, 0, 0);
+          endTime = new Date(startTime.getTime() + 5 * 60 * 60 * 1000);
+        }
+
+        const durationHours = (
+          (endTime - startTime) /
+          (1000 * 60 * 60)
+        ).toFixed(1);
+        calendar.addEvent({
+          title: `${emp.name} (${durationHours}h)`,
+          start: startTime.toISOString(),
+          end: endTime.toISOString(),
+        });
+
+        saveScheduledEvents();
+        showWeeklyHours();
+      }
+
+      function createTime(day, timeStr) {
+        const [h, m] = timeStr.split(":").map(Number);
+        const dt = new Date(day);
+        dt.setHours(h, m, 0, 0);
+        return dt;
+      }
+
+      function updateDurationLabel(event) {
+        const durationHours = (
+          (event.end - event.start) /
+          (1000 * 60 * 60)
+        ).toFixed(1);
+        event.setProp(
+          "title",
+          `${event.title.split("(")[0].trim()} (${durationHours}h)`
+        );
+      }
+
+      function applyTemplate() {
+        const templateName = document.getElementById('templateSelect').value;
+        if (!templateName) {
+          alert('Please select a template');
+          return;
+        }
+
+        const templates = JSON.parse(localStorage.getItem('scheduleTemplates')) || {};
+        const template = templates[templateName];
+        
+        if (!template) {
+          alert('Template not found');
+          return;
+        }
+
+        // Save the selected template name for the generate button to use
+        localStorage.setItem('selectedTemplate', templateName);
+        alert(`Template "${templateName}" is now active. Use the Generate Schedule button to create shifts.`);
+        closeTemplateManager();
+      }
+
+      function generateSchedule() {
+        console.log('Starting schedule generation...');
+        
+        const storeInfo = JSON.parse(localStorage.getItem("storeInfo"));
+        const employees = JSON.parse(localStorage.getItem("crewEmployees")) || [];
+        const templateName = localStorage.getItem('selectedTemplate');
+
+        console.log('Template name:', templateName);
+        console.log('Number of employees:', employees.length);
+        console.log('Store info:', storeInfo);
+
+        if (!storeInfo || !storeInfo.hours || employees.length < 3) {
+          alert("Missing store info or insufficient employees.");
+          return;
+        }
+
+        if (!templateName) {
+          alert("Please select and apply a template first");
+          return;
+        }
+
+        const templates = JSON.parse(localStorage.getItem('scheduleTemplates')) || {};
+        const template = templates[templateName];
+        
+        console.log('Template found:', template);
+        
+        if (!template || !template.days) {
+          alert('Selected template not found or invalid');
+          return;
+        }
+
+        const keyholders = employees.filter((emp) => emp.role === "Key Holder");
+        const nonKeyholders = employees.filter(
+          (emp) => emp.role === "Non-Key Holder"
+        );
+
+        console.log('Keyholders:', keyholders);
+        console.log('Non-keyholders:', nonKeyholders);
+
+        if (keyholders.length < 2 || nonKeyholders.length < 2) {
+          alert("At least 2 key holders and 2 non-key holders required.");
+          return;
+        }
+
+        const today = new Date();
+        let startDate = null;
+
+        // Find the first available day that matches the template
+        for (let offset = 0; offset < 30; offset++) {
+          const date = new Date(today);
+          date.setDate(today.getDate() + offset);
+          const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
+          
+          console.log('Checking day:', dayName, 'for date:', date.toDateString());
+          console.log('Template has this day:', template.days[dayName]);
+          
+          // Check if this day is enabled in the template and has shifts
+          if (template.days[dayName] && Array.isArray(template.days[dayName]) && template.days[dayName].length > 0) {
+            const eventsOnDay = calendar.getEvents().filter(event => 
+              new Date(event.start).toDateString() === date.toDateString()
+            );
+            console.log('Events on this day:', eventsOnDay.length);
+            
+            if (eventsOnDay.length === 0) {
+              startDate = date;
+              console.log('Found available start date:', startDate.toDateString());
+              break;
+            }
+          }
+        }
+
+        if (!startDate) {
+          alert("No available days found in the next 30 days that match the template");
+          return;
+        }
+
+        // Store this week's assignments
+        const thisWeekAssignments = {};
+
+        // Get the last week's schedule to avoid repeating patterns
+        const lastWeekSchedule = JSON.parse(localStorage.getItem("lastWeekSchedule")) || {};
+        const lastWeekAssignments = lastWeekSchedule.assignments || {};
+
+        // Generate shifts for the next 7 days starting from startDate
+        for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+          const currentDate = new Date(startDate);
+          currentDate.setDate(startDate.getDate() + dayOffset);
+          const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][currentDate.getDay()];
+          
+          console.log('Generating schedule for:', dayName, 'on', currentDate.toDateString());
+
+          // Skip if this day is not enabled in the template
+          if (!template.days[dayName] || !Array.isArray(template.days[dayName]) || template.days[dayName].length === 0) {
+            console.log('No shifts defined for', dayName);
+            continue;
+          }
+
+          // Initialize assignments for this day
+          thisWeekAssignments[dayName] = {};
+
+          // Calculate total hours worked by each employee
+          const employeeHours = {};
+          employees.forEach(emp => employeeHours[emp.name] = 0);
+          
+          // Get all events for the current week
+          const weekStart = new Date(startDate);
+          weekStart.setHours(0, 0, 0, 0);
+          const weekEnd = new Date(startDate);
+          weekEnd.setDate(weekEnd.getDate() + 7);
+          weekEnd.setHours(23, 59, 59, 999);
+          
+          calendar.getEvents().forEach(event => {
+            if (event.start >= weekStart && event.start < weekEnd) {
+              const name = event.title.split(" (")[0];
+              const duration = (event.end - event.start) / (1000 * 60 * 60);
+              employeeHours[name] = (employeeHours[name] || 0) + duration;
+            }
+          });
+
+          // Sort shifts by type (open/close first, then floor)
+          const sortedShifts = [...template.days[dayName]].sort((a, b) => {
+            if ((a.type === 'open' || a.type === 'close') && b.type === 'floor') return -1;
+            if (a.type === 'floor' && (b.type === 'open' || b.type === 'close')) return 1;
+            return 0;
+          });
+
+          // Schedule shifts for the current day
+          sortedShifts.forEach(shift => {
+            console.log('Processing shift:', shift);
+            
+            if (!shift.start || !shift.end || !shift.type) {
+              console.log('Invalid shift data:', shift);
+              return;
+            }
+
+            const startTime = new Date(currentDate);
+            const [startHour, startMin] = shift.start.split(':').map(Number);
+            startTime.setHours(startHour, startMin, 0, 0);
+
+            const endTime = new Date(currentDate);
+            const [endHour, endMin] = shift.end.split(':').map(Number);
+            endTime.setHours(endHour, endMin, 0, 0);
+
+            const shiftDuration = (endTime - startTime) / (1000 * 60 * 60);
+            console.log('Shift duration:', shiftDuration, 'hours');
+
+            let employee;
+            if (shift.type === 'open' || shift.type === 'close') {
+              // For opening and closing shifts, only use keyholders
+              let availableKeyholders = keyholders.filter(emp => 
+                !Object.values(thisWeekAssignments[dayName]).includes(emp.name)
+              );
+
+              // Filter out employees who worked this position last week
+              const lastWeekDayAssignments = lastWeekAssignments[dayName] || {};
+              if (lastWeekDayAssignments[shift.type]) {
+                availableKeyholders = availableKeyholders.filter(emp => 
+                  emp.name !== lastWeekDayAssignments[shift.type]
+                );
+              }
+              
+              // If no keyholders available after filtering, use all keyholders
+              if (availableKeyholders.length === 0) {
+                availableKeyholders = keyholders;
+              }
+
+              // Sort by hours worked and add some randomization
+              availableKeyholders.sort((a, b) => {
+                const hoursDiff = (employeeHours[a.name] || 0) - (employeeHours[b.name] || 0);
+                // Add random factor to avoid always picking the same person
+                return hoursDiff + (Math.random() - 0.5) * 2;
+              });
+              
+              employee = availableKeyholders[0];
+            } else {
+              // For floor shifts, use all employees but prefer those with fewer hours
+              let allEmployees = [...keyholders, ...nonKeyholders].filter(emp => 
+                !Object.values(thisWeekAssignments[dayName]).includes(emp.name)
+              );
+
+              // Filter out employees who worked this position last week
+              const lastWeekDayAssignments = lastWeekAssignments[dayName] || {};
+              if (lastWeekDayAssignments[shift.type]) {
+                allEmployees = allEmployees.filter(emp => 
+                  emp.name !== lastWeekDayAssignments[shift.type]
+                );
+              }
+
+              // If no employees available after filtering, use all employees
+              if (allEmployees.length === 0) {
+                allEmployees = [...keyholders, ...nonKeyholders];
+              }
+              
+              // Sort by hours worked and add some randomization
+              allEmployees.sort((a, b) => {
+                const hoursDiff = (employeeHours[a.name] || 0) - (employeeHours[b.name] || 0);
+                // Add random factor to avoid always picking the same person
+                return hoursDiff + (Math.random() - 0.5) * 2;
+              });
+              
+              employee = allEmployees[0];
+            }
+
+            console.log('Selected employee:', employee.name, 'with', employeeHours[employee.name], 'hours');
+
+            // Store this assignment
+            thisWeekAssignments[dayName][shift.type] = employee.name;
+            
+            // Update hours for this employee
+            employeeHours[employee.name] = (employeeHours[employee.name] || 0) + shiftDuration;
+
+            const event = calendar.addEvent({
+              title: `${employee.name} (${shift.type.charAt(0).toUpperCase() + shift.type.slice(1)} - ${getHoursDiff(startTime, endTime)}h)`,
+              start: startTime.toISOString(),
+              end: endTime.toISOString()
+            });
+            
+            console.log('Added event:', event);
+          });
+        }
+
+        // Save this week's assignments for next week's reference
+        localStorage.setItem("lastWeekSchedule", JSON.stringify({
+          assignments: thisWeekAssignments,
+          generatedDate: new Date().toISOString()
+        }));
+
+        saveScheduledEvents();
+        showWeeklyHours();
+        
+        console.log('Schedule generation completed');
+      }
+
+      function getHoursDiff(start, end) {
+        return ((end - start) / (1000 * 60 * 60)).toFixed(1);
+      }
+
+      let clickedEvent = null;
+
+      document.addEventListener("dblclick", (e) => {
+        const el = e.target.closest(".fc-event");
+        if (!el) return;
+
+        const eventApi = calendar.getEventById(
+          el.getAttribute("data-event-id")
+        );
+        if (!eventApi) return;
+
+        clickedEvent = eventApi;
+
+        // Position and show the menu
+        const menu = document.getElementById("eventOptions");
+        menu.style.top = `${e.clientY + 10}px`;
+        menu.style.left = `${e.clientX + 10}px`;
+        menu.style.display = "block";
+      });
+
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest("#eventOptions")) {
+          document.getElementById("eventOptions").style.display = "none";
+        }
+      });
+
+      function duplicateEvent() {
+        if (!clickedEvent) return;
+        calendar.addEvent({
+          title: clickedEvent.title,
+          start: new Date(
+            clickedEvent.start.getTime() + 15 * 60 * 1000
+          ).toISOString(),
+          end: new Date(
+            clickedEvent.end.getTime() + 15 * 60 * 1000
+          ).toISOString(),
+        });
+        document.getElementById("eventOptions").style.display = "none";
+        saveScheduledEvents();
+      }
+
+      function deleteEvent() {
+        if (!clickedEvent) return;
+        clickedEvent.remove();
+        clickedEvent = null;
+        document.getElementById("eventOptions").style.display = "none";
+        saveScheduledEvents();
+      }
+
+      function reassignEvent(newName) {
+        if (!clickedEvent || !newName) return;
+        const duration =
+          (clickedEvent.end - clickedEvent.start) / (1000 * 60 * 60);
+        clickedEvent.setProp("title", `${newName} (${duration.toFixed(1)}h)`);
+        document.getElementById("eventOptions").style.display = "none";
+      }
+
+      function confirmReassign() {
+        const dropdown = document.getElementById("reassignDropdown");
+        const selectedName = dropdown.value;
+        if (!selectedName || !selectedEvent) return;
+
+        const duration = (
+          (selectedEvent.end - selectedEvent.start) /
+          (1000 * 60 * 60)
+        ).toFixed(1);
+        selectedEvent.setProp("title", `${selectedName} (${duration}h)`);
+        closeReassignModal();
+      }
+
+      function closeReassignModal() {
+        document.getElementById("reassignModal").style.display = "none";
+      }
+
+      function toggleSettings() {
+        document.getElementById("settingsPanel").classList.toggle("active");
+      }
+
+      function toggleTheme() {
+        document.body.classList.toggle("dark");
+        const calendarEl = document.getElementById("calendar");
+        if (document.body.classList.contains("dark")) {
+          calendarEl.setAttribute("data-theme", "dark");
+        } else {
+          calendarEl.removeAttribute("data-theme");
+        }
+        localStorage.setItem(
+          "darkMode",
+          document.body.classList.contains("dark")
+        );
+      }
+
+      function toggleBalls() {
+        const enabled = document.getElementById("ballsToggle").checked;
+        localStorage.setItem("ballsEnabled", enabled);
+        document.getElementById("ballContainer").style.display = enabled
+          ? "block"
+          : "none";
+      }
+
+      window.onload = function () {
+        if (localStorage.getItem("darkMode") === "true") {
+          document.body.classList.add("dark");
+          document.getElementById("darkModeToggle").checked = true;
+        }
+        const ballsEnabled = localStorage.getItem("ballsEnabled") !== "false";
+        document.getElementById("ballsToggle").checked = ballsEnabled;
+        document.getElementById("ballContainer").style.display = ballsEnabled
+          ? "block"
+          : "none";
+      };
+
+      function saveScheduledEvents() {
+        const events = calendar.getEvents().map((event) => ({
+          title: event.title,
+          start: event.start.toISOString(),
+          end: event.end.toISOString(),
+        }));
+        localStorage.setItem("scheduledShifts", JSON.stringify(events));
+        showWeeklyHours();
+      }
+
+      function showWeeklyHours() {
+        const view = calendar.view;
+        const startOfPeriod = new Date(view.activeStart);
+        const endOfPeriod = new Date(view.activeEnd);
+        const isMonthlyView = view.type === 'dayGridMonth';
+
+        const events = calendar.getEvents().filter((event) => {
+          return event.start >= startOfPeriod && event.start < endOfPeriod;
+        });
+
+        const hoursPerPerson = {};
+
+        events.forEach((event) => {
+          const nameMatch = event.title.match(/^(.+?) \(/);
+          if (!nameMatch) return;
+          const name = nameMatch[1];
+          const duration = (event.end - event.start) / (1000 * 60 * 60);
+          if (!hoursPerPerson[name]) hoursPerPerson[name] = 0;
+          hoursPerPerson[name] += duration;
+        });
+
+        const listEl = document.getElementById("weeklyHoursList");
+        listEl.innerHTML = "";
+
+        const sorted = Object.entries(hoursPerPerson).sort(
+          (a, b) => b[1] - a[1]
+        );
+
+        const title = document.getElementById("weeklyHoursHeader");
+        const options = { month: "long", day: "numeric" };
+        const startStr = startOfPeriod.toLocaleDateString(undefined, options);
+        const endStr = new Date(endOfPeriod.getTime() - 1).toLocaleDateString(
+          undefined,
+          options
+        );
+        title.textContent = `${isMonthlyView ? 'Monthly' : 'Weekly'} Hours Per Employee (${startStr} – ${endStr})`;
+
+        if (sorted.length === 0) {
+          listEl.innerHTML = `<li>No shifts scheduled this ${isMonthlyView ? 'month' : 'week'}.</li>`;
+          return;
+        }
+
+        sorted.forEach(([name, hours]) => {
+          const li = document.createElement("li");
+          li.textContent = `${name}: ${hours.toFixed(1)} hours`;
+          listEl.appendChild(li);
+        });
+      }
+
+      function getWeekKey(date) {
+        const temp = new Date(
+          Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
+        );
+        const dayNum = temp.getUTCDay() || 7;
+        temp.setUTCDate(temp.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(temp.getUTCFullYear(), 0, 1));
+        const weekNo = Math.ceil(((temp - yearStart) / 86400000 + 1) / 7);
+        return `${temp.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+      }
+
+      // WhatsApp sharing function
+      function sendWhatsApp(useNumber = false) {
+        const view = calendar.view;
+        const startOfWeek = new Date(view.activeStart);
+        const endOfWeek = new Date(view.activeEnd);
+        const events = calendar.getEvents().filter(event =>
+          event.start >= startOfWeek && event.start < endOfWeek
+        );
+
+        if (events.length === 0) {
+          alert("No shifts scheduled this week.");
+          return;
+        }
+
+        const options = { weekday: "short", month: "short", day: "numeric" };
+        const fullOptions = { weekday: "long", month: "short", day: "numeric" };
+
+        const daysMap = {};
+        events.forEach(event => {
+          const dateKey = event.start.toDateString();
+          if (!daysMap[dateKey]) daysMap[dateKey] = [];
+          const name = event.title.split(" (")[0];
+          const shiftLabel = event.title.split(" - ")[0].split("(")[1]?.trim() || "";
+          const duration = event.title.match(/\(([^)]+h)\)/)?.[1] || "";
+          const startTime = event.start.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          const endTime = event.end.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          daysMap[dateKey].push(
+            `- ${name} (${shiftLabel} - ${duration}) (${startTime}–${endTime})`
+          );
+        });
+
+        const startStr = startOfWeek.toLocaleDateString(undefined, options);
+        const endStr = new Date(endOfWeek.getTime() - 1).toLocaleDateString(
+          undefined,
+          options
+        );
+
+        let message = `📅 Weekly Schedule (${startStr} – ${endStr})\n\n`;
+
+        Object.keys(daysMap)
+          .sort((a, b) => new Date(a) - new Date(b))
+          .forEach(date => {
+            const dayHeader = new Date(date).toLocaleDateString(undefined, fullOptions);
+            message += `${dayHeader}\n${daysMap[date].join("\n")}\n\n`;
+          });
+
+        const encoded = encodeURIComponent(message.trim());
+        const number = document.getElementById("whatsappNumber")?.value;
+        const url = number ? 
+          `https://wa.me/${number}?text=${encoded}` : 
+          `https://wa.me/?text=${encoded}`;
+        window.open(url, "_blank");
+      }
+
+      function toggleWhatsAppInput() {
+        const container = document.getElementById("whatsappContainer");
+        const toggleBtn = document.getElementById("toggleWhatsAppBtn");
+
+        if (!container || !toggleBtn) return;
+
+        const isVisible = container.style.display === "flex";
+        container.style.display = isVisible ? "none" : "flex";
+        toggleBtn.innerHTML = isVisible
+          ? `<i class="fab fa-whatsapp"></i> Send via WhatsApp`
+          : `Hide Number Field`;
+      }
+
+      function logout() {
+        localStorage.removeItem("loggedInUser");
+        window.location.href = "login.html";
+      }
+
+      // Template System Functions
+      function openTemplateManager() {
+        updateTemplateSelect();
+        document.getElementById('templateManagerModal').style.display = 'flex';
+      }
+
+      function closeTemplateManager() {
+        document.getElementById('templateManagerModal').style.display = 'none';
+      }
+
+      function openTemplateDesigner(templateToEdit = null) {
+        const modal = document.getElementById('templateDesignerModal');
+        const templateDays = document.getElementById('templateDays');
+        const title = document.getElementById('templateDesignerTitle');
+        templateDays.innerHTML = '';
+
+        // Set title and form state based on whether we're editing
+        if (templateToEdit) {
+          title.textContent = 'Edit Schedule Template';
+          document.getElementById('templateName').value = templateToEdit.name;
+        } else {
+          title.textContent = 'Design Schedule Template';
+          document.getElementById('templateName').value = '';
+        }
+
+        const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        
+        daysOfWeek.forEach(day => {
+          const dayDiv = document.createElement('div');
+          dayDiv.style.background = 'var(--primary-light)';
+          dayDiv.style.padding = '1.5rem';
+          dayDiv.style.borderRadius = 'var(--radius)';
+          
+          // Check if this day is enabled in the template being edited
+          const isEnabled = templateToEdit ? templateToEdit.days[day] !== undefined : true;
+          
+          dayDiv.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <h4 style="margin: 0; font-size: 1.2rem;">${day}</h4>
+              <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" class="day-enabled" data-day="${day}" ${isEnabled ? 'checked' : ''} 
+                       style="width: 1.2rem; height: 1.2rem;">
+                Enable Day
+              </label>
+            </div>
+            <div class="day-shifts" style="display: grid; gap: 1rem;">
+              ${templateToEdit && templateToEdit.days[day] ? 
+                templateToEdit.days[day].map(shift => `
+                  <div class="shift-row" style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: center; background: white; padding: 1rem; border-radius: var(--radius);">
+                    <select class="shift-type" style="padding: 0.6rem; border-radius: var(--radius); border: 1px solid #e5e7eb;">
+                      <option value="open" ${shift.type === 'open' ? 'selected' : ''}>Opening Shift</option>
+                      <option value="close" ${shift.type === 'close' ? 'selected' : ''}>Closing Shift</option>
+                      <option value="floor" ${shift.type === 'floor' ? 'selected' : ''}>Floor Shift</option>
+                    </select>
+                    <input type="time" class="shift-start" value="${shift.start}" 
+                           style="padding: 0.6rem; border-radius: var(--radius); border: 1px solid #e5e7eb;">
+                    <input type="time" class="shift-end" value="${shift.end}" 
+                           style="padding: 0.6rem; border-radius: var(--radius); border: 1px solid #e5e7eb;">
+                    <button type="button" class="button" onclick="this.parentElement.remove()" 
+                            style="background: #dc2626; padding: 0.6rem;">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                `).join('') : 
+                `<div class="shift-row" style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: center; background: white; padding: 1rem; border-radius: var(--radius);">
+                  <select class="shift-type" style="padding: 0.6rem; border-radius: var(--radius); border: 1px solid #e5e7eb;">
+                    <option value="open">Opening Shift</option>
+                    <option value="close">Closing Shift</option>
+                    <option value="floor">Floor Shift</option>
+                  </select>
+                  <input type="time" class="shift-start" value="09:45" 
+                         style="padding: 0.6rem; border-radius: var(--radius); border: 1px solid #e5e7eb;">
+                  <input type="time" class="shift-end" value="15:45" 
+                         style="padding: 0.6rem; border-radius: var(--radius); border: 1px solid #e5e7eb;">
+                  <button type="button" class="button" onclick="this.parentElement.remove()" 
+                          style="background: #dc2626; padding: 0.6rem;">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>`
+              }
+            </div>
+            <button type="button" class="button" onclick="addShiftRow(this)" 
+                    style="margin-top: 1rem; font-size: 0.9rem; background: var(--primary);">
+              <i class="fas fa-plus" style="margin-right: 0.5rem;"></i>Add Shift
+            </button>
+          `;
+          templateDays.appendChild(dayDiv);
+        });
+
+        modal.style.display = 'flex';
+      }
+
+      function addShiftRow(button) {
+        const shiftRow = document.createElement('div');
+        shiftRow.className = 'shift-row';
+        shiftRow.style.display = 'grid';
+        shiftRow.style.gridTemplateColumns = '1fr 1fr 1fr auto';
+        shiftRow.style.gap = '1rem';
+        shiftRow.style.alignItems = 'center';
+        shiftRow.style.background = 'white';
+        shiftRow.style.padding = '1rem';
+        shiftRow.style.borderRadius = 'var(--radius)';
+        shiftRow.innerHTML = `
+          <select class="shift-type" style="padding: 0.6rem; border-radius: var(--radius); border: 1px solid #e5e7eb;">
+            <option value="open">Opening Shift</option>
+            <option value="close">Closing Shift</option>
+            <option value="floor">Floor Shift</option>
+          </select>
+          <input type="time" class="shift-start" value="09:45" 
+                 style="padding: 0.6rem; border-radius: var(--radius); border: 1px solid #e5e7eb;">
+          <input type="time" class="shift-end" value="15:45" 
+                 style="padding: 0.6rem; border-radius: var(--radius); border: 1px solid #e5e7eb;">
+          <button type="button" class="button" onclick="this.parentElement.remove()" 
+                  style="background: #dc2626; padding: 0.6rem;">
+            <i class="fas fa-trash"></i>
+          </button>
+        `;
+        button.parentElement.querySelector('.day-shifts').appendChild(shiftRow);
+      }
+
+      function closeTemplateDesigner() {
+        document.getElementById('templateDesignerModal').style.display = 'none';
+      }
+
+      function editSelectedTemplate() {
+        const templateName = document.getElementById('templateSelect').value;
+        if (!templateName) {
+          alert('Please select a template to edit');
+          return;
+        }
+
+        const templates = JSON.parse(localStorage.getItem('scheduleTemplates')) || {};
+        const template = templates[templateName];
+        
+        if (!template) {
+          alert('Template not found');
+          return;
+        }
+
+        openTemplateDesigner(template);
+      }
+
+      function saveTemplate() {
+        const templateName = document.getElementById('templateName').value;
+        if (!templateName) {
+          alert('Please enter a template name');
+          return;
+        }
+
+        const template = {
+          name: templateName,
+          days: {}
+        };
+
+        document.querySelectorAll('#templateDays > div').forEach(dayDiv => {
+          const day = dayDiv.querySelector('.day-enabled').dataset.day;
+          const isEnabled = dayDiv.querySelector('.day-enabled').checked;
+          
+          if (isEnabled) {
+            template.days[day] = [];
+            dayDiv.querySelectorAll('.shift-row').forEach(row => {
+              const startTime = row.querySelector('.shift-start').value;
+              const endTime = row.querySelector('.shift-end').value;
+              
+              if (startTime && endTime) {
+                template.days[day].push({
+                  type: row.querySelector('.shift-type').value,
+                  start: startTime,
+                  end: endTime
+                });
+              }
+            });
+          }
+        });
+
+        try {
+          // Save template
+          const templates = JSON.parse(localStorage.getItem('scheduleTemplates')) || {};
+          templates[templateName] = template;
+          localStorage.setItem('scheduleTemplates', JSON.stringify(templates));
+
+          // Update template select
+          updateTemplateSelect();
+          closeTemplateDesigner();
+          
+          // Show success message
+          alert(`Template "${templateName}" saved successfully!`);
+        } catch (error) {
+          console.error('Error saving template:', error);
+          alert('Error saving template. Please try again.');
+        }
+      }
+
+      function updateTemplateSelect() {
+        const select = document.getElementById('templateSelect');
+        const templates = JSON.parse(localStorage.getItem('scheduleTemplates')) || {};
+        const selectedTemplate = localStorage.getItem('selectedTemplate');
+        
+        select.innerHTML = '<option value="">Select Template</option>';
+        Object.keys(templates).forEach(name => {
+          const option = document.createElement('option');
+          option.value = name;
+          option.textContent = name;
+          if (name === selectedTemplate) {
+            option.selected = true;
+          }
+          select.appendChild(option);
+        });
+      }
+
+      function deleteTemplate() {
+        const templateName = document.getElementById('templateSelect').value;
+        if (!templateName) {
+          alert('Please select a template to delete');
+          return;
+        }
+
+        if (confirm(`Are you sure you want to delete the template "${templateName}"?`)) {
+          const templates = JSON.parse(localStorage.getItem('scheduleTemplates')) || {};
+          delete templates[templateName];
+          localStorage.setItem('scheduleTemplates', JSON.stringify(templates));
+          updateTemplateSelect();
+        }
+      }
+
+      // Initialize template system
+      document.addEventListener('DOMContentLoaded', function() {
+        // Initialize template select
+        updateTemplateSelect();
+      });
+
+      function getRandomEmployee(list, day, position) {
+        // Get the last week's schedule to avoid repeating patterns
+        const lastWeekSchedule = JSON.parse(localStorage.getItem('lastWeekSchedule')) || {};
+        const lastWeekAssignments = lastWeekSchedule.assignments || {};
+        const lastWeekDayAssignments = lastWeekAssignments[day.toDateString()] || {};
+        
+        // Filter out employees who worked this position last week
+        const availableEmployees = list.filter(emp => 
+          !lastWeekDayAssignments[position] || lastWeekDayAssignments[position] !== emp.name
+        );
+
+        if (availableEmployees.length === 0) {
+          return list[Math.floor(Math.random() * list.length)];
+        }
+
+        return availableEmployees[Math.floor(Math.random() * availableEmployees.length)];
+      }
+    </script>
+  </body>
+</html>

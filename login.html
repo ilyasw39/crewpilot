@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CrewPilot Login</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary: #00adb5;
+        --primary-light: #eef2ff;
+        --text: #111827;
+        --background: #f4f4f8;
+        --container-bg: #ffffff;
+        --radius: 12px;
+        --gray: #6b7280;
+      }
+
+      body.dark {
+        --background: #1e1e2f;
+        --text: #f3f4f6;
+        --primary-light: #2c2e3a;
+        --container-bg: #2b2b3d;
+      }
+
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: var(--background);
+        color: var(--text);
+        margin: 0;
+        transition: background 0.3s ease, color 0.3s ease;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-image: linear-gradient(
+            to right,
+            rgba(0, 0, 0, 0.05) 2px,
+            transparent 2px
+          ),
+          linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 2px, transparent 2px);
+        background-size: 140px 140px;
+        z-index: -3;
+        pointer-events: none;
+      }
+
+      body.dark::before {
+        background-image: linear-gradient(
+            to right,
+            rgba(255, 255, 255, 0.05) 2px,
+            transparent 2px
+          ),
+          linear-gradient(
+            to bottom,
+            rgba(255, 255, 255, 0.05) 2px,
+            transparent 2px
+          );
+      }
+
+      .page-container {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+
+      header {
+        width: 100%;
+        margin: 0 auto;
+        padding: 1.2rem 1.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: var(--primary-light);
+        border-bottom: 1px solid #e5e7eb;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        box-sizing: border-box;
+      }
+
+      .logo img {
+        max-height: 45px;
+        cursor: pointer;
+      }
+
+      nav {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-shrink: 0;
+        flex-wrap: wrap;
+        max-width: 100%;
+      }
+
+      nav a {
+        text-decoration: none;
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      nav a:hover {
+        color: var(--primary);
+      }
+
+      .login {
+        background: var(--primary);
+        color: white;
+        padding: 0.4rem 0.8rem;
+        border-radius: var(--radius);
+      }
+
+      .settings-toggle {
+        display: flex;
+        align-items: center;
+        margin-top: 15px;
+      }
+
+      .settings-toggle button {
+        background: transparent !important;
+        border: none;
+        color: var(--text);
+        font-size: 1.5rem;
+        cursor: pointer;
+        transition: transform 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        outline: none;
+      }
+
+      .settings-toggle button:hover {
+        transform: rotate(180deg);
+      }
+
+      .settings-panel {
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        background: var(--primary-light);
+        padding: 1rem;
+        border-radius: var(--radius);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        display: none;
+        flex-direction: column;
+        gap: 0.5rem;
+        z-index: 20;
+      }
+
+      .settings-panel.active {
+        display: flex;
+      }
+
+      main {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding-top: 100px;
+      }
+
+      .login-container {
+        background: var(--container-bg);
+        padding: 2rem;
+        border-radius: 10px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        width: 100%;
+        max-width: 300px;
+        text-align: center;
+      }
+
+      h1 {
+        font-size: 1.8rem;
+        font-weight: 700;
+        margin-bottom: 1.5rem;
+        color: var(--text);
+      }
+
+      label {
+        display: block;
+        text-align: left;
+        margin: 0.5rem 0 0.2rem;
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      input,
+      button {
+        width: 100%;
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+        font-size: 1rem;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        background: var(--background);
+        color: var(--text);
+        box-sizing: border-box;
+      }
+
+      button {
+        background-color: var(--primary);
+        color: white;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background-color: #007b80;
+      }
+
+      .ball-decoration {
+        position: absolute;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle at 30% 30%,
+          var(--primary),
+          var(--gray)
+        );
+        opacity: 0.2;
+        z-index: -2;
+        animation: float 8s ease-in-out infinite;
+        pointer-events: none;
+      }
+
+      .ball-decoration:nth-child(1) {
+        top: 10%;
+        left: 5%;
+        width: 100px;
+        height: 100px;
+        animation-delay: 0s;
+      }
+      .ball-decoration:nth-child(2) {
+        top: 60%;
+        right: 8%;
+        width: 80px;
+        height: 80px;
+        animation-delay: 1s;
+      }
+      .ball-decoration:nth-child(3) {
+        bottom: 15%;
+        left: 15%;
+        width: 60px;
+        height: 60px;
+        animation-delay: 2s;
+      }
+      .ball-decoration:nth-child(4) {
+        bottom: 5%;
+        right: 20%;
+        width: 120px;
+        height: 120px;
+        animation-delay: 3s;
+      }
+      .ball-decoration:nth-child(5) {
+        top: 30%;
+        left: 40%;
+        width: 70px;
+        height: 70px;
+        animation-delay: 4s;
+      }
+      .ball-decoration:nth-child(6) {
+        top: 10%;
+        right: 10%;
+        width: 90px;
+        height: 90px;
+        animation-delay: 5s;
+      }
+      .ball-decoration:nth-child(7) {
+        bottom: 20%;
+        left: 30%;
+        width: 110px;
+        height: 110px;
+        animation-delay: 6s;
+      }
+      .ball-decoration:nth-child(8) {
+        bottom: 10%;
+        right: 5%;
+        width: 50px;
+        height: 50px;
+        animation-delay: 7s;
+      }
+      .ball-decoration:nth-child(9) {
+        top: 50%;
+        left: 10%;
+        width: 110px;
+        height: 110px;
+        animation-delay: 8s;
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0) rotate(0deg);
+        }
+        50% {
+          transform: translateY(-20px) rotate(5deg);
+        }
+      }
+      #ballContainer {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        z-index: -2;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ballContainer">
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+    </div>
+
+    <div class="page-container">
+      <header>
+        <div class="logo" onclick="location.href='main.html'">
+          <img src="/images/plane_blue_nobg.png" alt="CrewPilot Logo" />
+        </div>
+        <nav>
+          <div class="settings-toggle">
+            <button onclick="toggleSettings()">
+              <i class="fas fa-cog"></i>
+            </button>
+          </div>
+        </nav>
+      </header>
+
+      <div class="settings-panel" id="settingsPanel">
+        <label>
+          <input type="checkbox" id="darkModeToggle" onchange="toggleTheme()" />
+          Dark Mode
+        </label>
+        <label>
+          <input type="checkbox" id="ballsToggle" onchange="toggleBalls()" />
+          Floating Balls
+        </label>
+      </div>
+
+      <main>
+        <div class="login-container">
+          <h1>Owner Login</h1>
+          <form id="loginForm">
+            <label for="username">Username:</label>
+            <input type="text" id="username" required />
+
+            <label for="password">Password:</label>
+            <input type="password" id="password" required />
+
+            <button type="submit">Log In</button>
+          </form>
+
+          <button type="button" onclick="showChangePassword()">
+            Change Password
+          </button>
+
+          <div id="changePasswordForm" style="display: none">
+            <label for="oldPassword">Current Password:</label>
+            <input type="password" id="oldPassword" required />
+            <label for="newPassword">New Password:</label>
+            <input type="password" id="newPassword" required />
+            <button onclick="changePassword()">Confirm Change</button>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      function getOwnerAccounts() {
+        const saved = localStorage.getItem("ownerAccounts");
+        return saved ? JSON.parse(saved) : { jess: "1212", donna: "3434" };
+      }
+
+      function saveOwnerAccounts(accounts) {
+        localStorage.setItem("ownerAccounts", JSON.stringify(accounts));
+      }
+
+      let ownerAccounts = getOwnerAccounts();
+
+      function toggleSettings() {
+        document.getElementById("settingsPanel").classList.toggle("active");
+      }
+
+      function toggleTheme() {
+        document.body.classList.toggle("dark");
+        localStorage.setItem(
+          "darkMode",
+          document.body.classList.contains("dark")
+        );
+      }
+
+      function toggleBalls() {
+        const enabled = document.getElementById("ballsToggle").checked;
+        localStorage.setItem("ballsEnabled", enabled);
+        document.getElementById("ballContainer").style.display = enabled
+          ? "block"
+          : "none";
+      }
+
+      window.onload = function () {
+        if (localStorage.getItem("darkMode") === "true") {
+          document.body.classList.add("dark");
+          document.getElementById("darkModeToggle").checked = true;
+        }
+
+        const ballsEnabled = localStorage.getItem("ballsEnabled") !== "false";
+        document.getElementById("ballsToggle").checked = ballsEnabled;
+        document.getElementById("ballContainer").style.display = ballsEnabled
+          ? "block"
+          : "none";
+      };
+
+      document
+        .getElementById("loginForm")
+        .addEventListener("submit", function (e) {
+          e.preventDefault();
+          const username = document.getElementById("username").value.trim();
+          const password = document.getElementById("password").value;
+
+          if (ownerAccounts[username] && ownerAccounts[username] === password) {
+            localStorage.setItem(
+              "loggedInUser",
+              JSON.stringify({ username, role: "owner" })
+            );
+            window.location.href = "schedule.html";
+          } else {
+            alert("Invalid username or password.");
+          }
+        });
+
+      function showChangePassword() {
+        document.getElementById("changePasswordForm").style.display = "block";
+      }
+
+      function changePassword() {
+        const username = document.getElementById("username").value.trim();
+        const oldPass = document.getElementById("oldPassword").value;
+        const newPass = document.getElementById("newPassword").value;
+
+        if (!ownerAccounts[username]) {
+          alert("Username not found.");
+          return;
+        }
+
+        if (ownerAccounts[username] !== oldPass) {
+          alert("Incorrect current password.");
+          return;
+        }
+
+        if (!newPass) {
+          alert("New password cannot be empty.");
+          return;
+        }
+
+        ownerAccounts[username] = newPass;
+        saveOwnerAccounts(ownerAccounts);
+        alert("Password updated successfully.");
+        document.getElementById("changePasswordForm").style.display = "none";
+      }
+    </script>
+  </body>
+</html>

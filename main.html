@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CrewPilot</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Indie+Flower&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      @font-face {
+        font-family: "Fontspring-DEMO-geraldton-medium";
+        src: url(/libraries/Fontspring-DEMO-geraldton-medium.otf)
+          format("opentype");
+      }
+
+      :root {
+        --primary: #00adb5;
+        --primary-light: #eef2ff;
+        --background: #ffffff;
+        --text: #111827;
+        --gray: #6b7280;
+        --radius: 14px;
+        font-size: 18px;
+      }
+
+      body.dark {
+        --background: #0029b5;
+        --text: #f3f4f6;
+        --gray: #9ca3af;
+        --primary-light: #2c2e3a;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Inter", sans-serif;
+        color: var(--text);
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow-x: hidden;
+        position: relative;
+        transition: background 0.3s ease, color 0.3s ease;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: -1;
+        background-color: white;
+        background-image: linear-gradient(
+            to right,
+            rgba(0, 0, 0, 0.25) 2px,
+            transparent 2px
+          ),
+          linear-gradient(to bottom, rgba(0, 0, 0, 0.25) 2px, transparent 2px);
+        background-size: 160px 160px;
+      }
+
+      body.dark::before {
+        background-color: #1e1e2f;
+        background-image: linear-gradient(
+            to right,
+            rgba(255, 255, 255, 0.25) 2px,
+            transparent 2px
+          ),
+          linear-gradient(
+            to bottom,
+            rgba(255, 255, 255, 0.25) 2px,
+            transparent 2px
+          );
+        background-size: 160px 160px;
+      }
+
+      header {
+        padding: 1.5rem 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: var(--primary-light);
+        border-bottom: 1px solid #e5e7eb;
+        z-index: 10;
+      }
+
+      .left-header {
+        display: flex;
+        align-items: center;
+      }
+
+      .logo {
+        font-size: 1.6rem;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        color: var(--primary);
+      }
+
+      .logo img {
+        max-height: 50px;
+        width: auto;
+      }
+
+      nav {
+        display: flex;
+        align-items: center;
+      }
+
+      nav a {
+        margin-left: 1.5rem;
+        text-decoration: none;
+        font-weight: 600;
+        color: var(--text);
+        transition: all 0.2s ease;
+      }
+
+      nav a:hover {
+        color: var(--primary);
+      }
+
+      nav a.logout {
+        background: var(--primary);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius);
+      }
+
+      .settings-toggle button {
+        margin-left: 1.5rem;
+        background: transparent;
+        border: none;
+        color: var(--text);
+        font-size: 1.5rem;
+        cursor: pointer;
+        transition: transform 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .settings-toggle i {
+        pointer-events: none;
+      }
+
+      .settings-toggle button:hover {
+        transform: rotate(180deg);
+      }
+
+      .settings-panel {
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        background: var(--primary-light);
+        padding: 1rem;
+        border-radius: var(--radius);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        display: none;
+        flex-direction: column;
+        gap: 0.5rem;
+        z-index: 20;
+      }
+
+      .settings-panel.active {
+        display: flex;
+      }
+
+      .hero {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 3rem 2rem;
+        text-align: center;
+        position: relative;
+        z-index: 1;
+      }
+
+      .hero h1 {
+        font-size: 4rem;
+        font-weight: 800;
+        margin-bottom: 1rem;
+        position: relative;
+        z-index: 2;
+      }
+
+      .hero p {
+        font-size: 1.5rem;
+        color: var(--gray);
+        max-width: 700px;
+        margin-bottom: 2.5rem;
+        position: relative;
+        z-index: 2;
+      }
+
+      .buttons {
+        display: flex;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+        position: relative;
+        z-index: 2;
+      }
+
+      .button {
+        background: var(--primary);
+        color: white;
+        padding: 1rem 2rem;
+        border: none;
+        border-radius: var(--radius);
+        font-size: 1.25rem;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        transition: background 0.2s ease;
+      }
+
+      .button:hover {
+        background: #0029b5;
+      }
+
+      footer {
+        text-align: center;
+        padding: 1rem;
+        font-size: 0.9rem;
+        color: var(--gray);
+        background: #f9fafb;
+        border-top: 1px solid #e5e7eb;
+        z-index: 10;
+      }
+
+      .circle-accent {
+        font-weight: 800;
+        color: var(--text);
+        position: relative;
+        text-shadow: -1px -1px 0 var(--primary), 1px -1px 0 var(--primary),
+          -1px 1px 0 var(--primary), 1px 1px 0 var(--primary);
+      }
+
+      .ball-decoration {
+        position: absolute;
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle at 30% 30%,
+          var(--primary),
+          var(--gray)
+        );
+        opacity: 0.2;
+        z-index: -1;
+        animation: float 8s ease-in-out infinite;
+      }
+
+      .ball-decoration:nth-child(1) {
+        top: 10%;
+        left: 5%;
+        animation-delay: 0s;
+      }
+
+      .ball-decoration:nth-child(2) {
+        top: 60%;
+        right: 8%;
+        animation-delay: 1s;
+        width: 80px;
+        height: 80px;
+      }
+
+      .ball-decoration:nth-child(3) {
+        bottom: 15%;
+        left: 15%;
+        animation-delay: 2s;
+        width: 60px;
+        height: 60px;
+      }
+
+      .ball-decoration:nth-child(4) {
+        bottom: 5%;
+        right: 20%;
+        animation-delay: 3s;
+        width: 120px;
+        height: 120px;
+      }
+
+      .ball-decoration:nth-child(5) {
+        top: 30%;
+        left: 40%;
+        animation-delay: 4s;
+        width: 70px;
+        height: 70px;
+      }
+
+      .ball-decoration:nth-child(6) {
+        top: 10%;
+        right: 10%;
+        animation-delay: 5s;
+        width: 90px;
+        height: 90px;
+      }
+
+      .ball-decoration:nth-child(7) {
+        bottom: 20%;
+        left: 30%;
+        animation-delay: 6s;
+        width: 110px;
+        height: 110px;
+      }
+
+      .ball-decoration:nth-child(8) {
+        bottom: 10%;
+        right: 5%;
+        animation-delay: 7s;
+        width: 50px;
+        height: 50px;
+      }
+
+      .ball-decoration:nth-child(9) {
+        top: 50%;
+        left: 10%;
+        animation-delay: 8s;
+        width: 110px;
+        height: 110px;
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0) rotate(0deg);
+        }
+        50% {
+          transform: translateY(-20px) rotate(5deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ballContainer">
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+    </div>
+    <header>
+      <div class="left-header">
+        <div class="logo">
+          <button
+            onclick="window.location.href='main.html'"
+            style="background: none; border: none; cursor: pointer"
+          >
+            <img src="/images/plane_blue_nobg.png" alt="CrewPilot Logo" />
+          </button>
+        </div>
+      </div>
+      <nav>
+        <a href="login.html" id="authButton" class="logout">Logout</a>
+        <a href="schedule.html">Schedule</a>
+        <a href="team.html">Team</a>
+        <a href="store.html">Store Info</a>
+        <div class="settings-toggle">
+          <button onclick="toggleSettings()">
+            <i class="fas fa-cog"></i>
+          </button>
+        </div>
+      </nav>
+    </header>
+
+    <div class="settings-panel" id="settingsPanel">
+      <label>
+        <input type="checkbox" id="darkModeToggle" onchange="toggleTheme()" />
+        Dark Mode
+      </label>
+      <label>
+        <input type="checkbox" id="ballsToggle" onchange="toggleBalls()" />
+        Floating Balls
+      </label>
+    </div>
+
+    <div class="hero">
+      <h1>Welcome to <span class="circle-accent">CrewPilot</span></h1>
+      <p>
+        Your all-in-one tool for effortless shift scheduling and team
+        coordination.
+      </p>
+      <div class="buttons">
+        <a href="schedule.html" class="button">Go to Schedule</a>
+        <a href="team.html" class="button">Manage Team</a>
+      </div>
+    </div>
+
+    <script>
+      const darkModeToggle = document.getElementById("darkModeToggle");
+      const ballsToggle = document.getElementById("ballsToggle");
+
+      function toggleSettings() {
+        document.getElementById("settingsPanel").classList.toggle("active");
+      }
+
+      function toggleTheme() {
+        document.body.classList.toggle("dark");
+        localStorage.setItem(
+          "darkMode",
+          document.body.classList.contains("dark")
+        );
+      }
+
+      function toggleBalls() {
+        const enabled = ballsToggle.checked;
+        localStorage.setItem("ballsEnabled", enabled);
+        document.getElementById("ballContainer").style.display = enabled
+          ? "block"
+          : "none";
+      }
+
+      window.onload = function () {
+        if (localStorage.getItem("darkMode") === "true") {
+          document.body.classList.add("dark");
+          darkModeToggle.checked = true;
+        }
+
+        const ballsEnabled = localStorage.getItem("ballsEnabled") !== "false"; //default true
+        ballsToggle.checked = ballsEnabled;
+        document.getElementById("ballContainer").style.display = ballsEnabled
+          ? "block"
+          : "none";
+
+        const authButton = document.getElementById("authButton");
+        const loggedInUser = JSON.parse(localStorage.getItem("loggedInUser"));
+        if (loggedInUser) {
+          authButton.textContent = "Logout";
+          authButton.onclick = function (e) {
+            e.preventDefault();
+            localStorage.removeItem("loggedInUser");
+            alert("You have been logged out.");
+            window.location.href = "main.html";
+          };
+        } else {
+          authButton.textContent = "Login";
+          authButton.href = "login.html";
+        }
+      };
+    </script>
+  </body>
+</html>

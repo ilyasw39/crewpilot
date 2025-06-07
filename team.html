@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Team Management - CrewPilot</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary: #00adb5;
+        --primary-light: #eef2ff;
+        --background: #ffffff;
+        --text: #111827;
+        --gray: #6b7280;
+        --radius: 14px;
+        font-size: 16px;
+      }
+      body.dark {
+        --background: #1e1e2f;
+        --text: #f3f4f6;
+        --gray: #9ca3af;
+        --primary-light: #2c2e3a;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: var(--background);
+        color: var(--text);
+        min-height: 100vh;
+        transition: background 0.3s ease, color 0.3s ease;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-image: linear-gradient(
+            to right,
+            rgba(0, 0, 0, 0.08) 2px,
+            transparent 2px
+          ),
+          linear-gradient(to bottom, rgba(0, 0, 0, 0.08) 2px, transparent 2px);
+        background-size: 140px 140px;
+        z-index: -1;
+      }
+
+      header {
+        padding: 1.2rem 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: var(--primary-light);
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      .logo img {
+        max-height: 45px;
+        cursor: pointer;
+      }
+      nav {
+        display: flex;
+        align-items: center;
+        gap: 1.2rem;
+      }
+      nav a {
+        text-decoration: none;
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      nav a:hover {
+        color: var(--primary);
+      }
+
+      .logout {
+        background: var(--primary);
+        color: white;
+        padding: 0.4rem 0.8rem;
+        border-radius: var(--radius);
+      }
+
+      .settings-toggle button {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        color: var(--text);
+        cursor: pointer;
+      }
+
+      .settings-toggle button:hover {
+        transform: rotate(180deg);
+      }
+
+      .settings-panel {
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        background: var(--primary-light);
+        padding: 1rem;
+        border-radius: var(--radius);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        display: none;
+        flex-direction: column;
+        gap: 0.5rem;
+        z-index: 20;
+      }
+
+      .settings-panel.active {
+        display: flex;
+      }
+
+      main {
+        padding: 2rem 4rem;
+        max-width: 1100px;
+        margin: auto;
+      }
+
+      h1 {
+        font-size: 2.2rem;
+        font-weight: 800;
+        margin-bottom: 1.5rem;
+      }
+
+      .top-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+      }
+
+      .button-group {
+        display: flex;
+        gap: 0.8rem;
+      }
+
+      .button {
+        background: var(--primary);
+        color: white;
+        padding: 0.6rem 1.2rem;
+        border: none;
+        border-radius: var(--radius);
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s ease;
+      }
+
+      .button:hover {
+        background: #007b80;
+      }
+
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin: 2rem 0;
+      }
+
+      .filters input,
+      .filters select {
+        padding: 0.6rem 1rem;
+        font-size: 1rem;
+        border-radius: var(--radius);
+        border: 1px solid #ccc;
+        min-width: 200px;
+      }
+
+      .employee-list h4 {
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+      }
+      .employee-list {
+        margin-top: 1rem;
+        background: var(--primary-light);
+        padding: 1.5rem;
+        border-radius: var(--radius);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 1rem;
+        border-radius: var(--radius);
+        overflow: hidden;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+      }
+
+      th,
+      td {
+        padding: 1rem;
+        border-bottom: 1px solid #e5e7eb;
+        text-align: left;
+      }
+
+      th {
+        background: var(--primary-light);
+        font-weight: 600;
+      }
+
+      tr:hover {
+        background-color: rgba(0, 173, 181, 0.04);
+      }
+
+      .popup {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.4);
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+      }
+
+      .popup-content {
+        background: var(--background);
+        padding: 2rem;
+        border-radius: var(--radius);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        width: 90%;
+        max-width: 400px;
+      }
+
+      .popup-content h3 {
+        margin-bottom: 1rem;
+        font-size: 1.4rem;
+      }
+
+      .popup-content input,
+      .popup-content select {
+        width: 100%;
+        margin-bottom: 1rem;
+        padding: 0.6rem;
+        border-radius: var(--radius);
+        border: 1px solid #ccc;
+      }
+
+      .popup-buttons {
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .popup .cancel {
+        background: #ccc;
+        color: #333;
+      }
+
+      .dropdown {
+        position: relative;
+      }
+      .dropdown .button {
+        background: var(--primary);
+        color: white;
+        padding: 0.6rem 1.2rem;
+        border: none;
+        border-radius: var(--radius);
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .dropdown-menu {
+        position: absolute;
+        top: 2.5rem;
+        right: 0;
+        background: var(--background);
+        border: 1px solid #ccc;
+        border-radius: var(--radius);
+        display: none;
+        flex-direction: column;
+        flex-wrap: nowrap;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        min-width: 150px;
+        z-index: 10;
+      }
+      .dropdown-menu button {
+        padding: 0.6rem 1rem;
+        border: none;
+        background: none;
+        text-align: left;
+        cursor: pointer;
+        width: 100%;
+      }
+      .dropdown-menu button:hover {
+        background: var(--primary-light);
+      }
+
+      .ball-decoration {
+        position: absolute;
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle at 30% 30%,
+          var(--primary),
+          var(--gray)
+        );
+        opacity: 0.2;
+        z-index: -1;
+        animation: float 8s ease-in-out infinite;
+      }
+
+      .ball-decoration:nth-child(1) {
+        top: 10%;
+        left: 5%;
+        animation-delay: 0s;
+      }
+
+      .ball-decoration:nth-child(2) {
+        top: 60%;
+        right: 8%;
+        animation-delay: 1s;
+        width: 80px;
+        height: 80px;
+      }
+
+      .ball-decoration:nth-child(3) {
+        bottom: 15%;
+        left: 15%;
+        animation-delay: 2s;
+        width: 60px;
+        height: 60px;
+      }
+
+      .ball-decoration:nth-child(4) {
+        bottom: 5%;
+        right: 20%;
+        animation-delay: 3s;
+        width: 120px;
+        height: 120px;
+      }
+
+      .ball-decoration:nth-child(5) {
+        top: 30%;
+        left: 40%;
+        animation-delay: 4s;
+        width: 70px;
+        height: 70px;
+      }
+
+      .ball-decoration:nth-child(6) {
+        top: 10%;
+        right: 10%;
+        animation-delay: 5s;
+        width: 90px;
+        height: 90px;
+      }
+
+      .ball-decoration:nth-child(7) {
+        bottom: 20%;
+        left: 30%;
+        animation-delay: 6s;
+        width: 110px;
+        height: 110px;
+      }
+
+      .ball-decoration:nth-child(8) {
+        bottom: 10%;
+        right: 5%;
+        animation-delay: 7s;
+        width: 50px;
+        height: 50px;
+      }
+
+      .ball-decoration:nth-child(9) {
+        top: 50%;
+        left: 10%;
+        animation-delay: 8s;
+        width: 110px;
+        height: 110px;
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0) rotate(0deg);
+        }
+        50% {
+          transform: translateY(-20px) rotate(5deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Ball Decorations -->
+    <div id="ballContainer">
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+      <div class="ball-decoration"></div>
+    </div>
+    <header>
+      <div class="logo" onclick="location.href='main.html'">
+        <img src="/images/plane_blue_nobg.png" alt="CrewPilot Logo" />
+      </div>
+      <nav>
+        <a onclick="logout()" class="logout">Logout</a>
+        <a href="schedule.html">Schedule</a>
+        <a href="team.html">Team</a>
+        <a href="store.html">Store Info</a>
+        <div class="settings-toggle">
+          <button onclick="toggleSettings()">
+            <i class="fas fa-cog"></i>
+          </button>
+        </div>
+      </nav>
+    </header>
+
+    <div class="settings-panel" id="settingsPanel">
+      <label
+        ><input type="checkbox" id="darkModeToggle" onchange="toggleTheme()" />
+        Dark Mode</label
+      >
+      <label>
+        <input type="checkbox" id="ballsToggle" onchange="toggleBalls()" />
+        Floating Balls
+      </label>
+    </div>
+
+    <main>
+      <h1>Team Management</h1>
+      <div class="top-controls">
+        <h2>View Employees</h2>
+        <div class="dropdown">
+          <button class="button" onclick="toggleEditMenu()">Edit</button>
+          <div class="dropdown-menu" id="editMenu">
+            <button onclick="openAddPopup()">Add Employee</button>
+            <button onclick="enableEditMode()">Edit Employee</button>
+            <button onclick="enableRemoveMode()">Remove Employee</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="filters">
+        <input
+          type="text"
+          id="searchInput"
+          placeholder="Search by name, email, or phone..."
+        />
+        <select id="roleFilter">
+          <option value="">Role</option>
+          <option value="Key Holder">Key Holder</option>
+          <option value="Non-Key Holder">Non-Key Holder</option>
+        </select>
+      </div>
+
+      <div class="employee-list">
+        <h4>Employees (2)</h4>
+        <table id="employeeTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Phone Number</th>
+              <th>Role</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <!-- Add Employee popup -->
+      <div id="addEmployeepopup" class="popup">
+        <div class="popup-content">
+          <h3>Add New Employee</h3>
+          <form id="addEmployeeForm">
+            <input type="text" id="empName" placeholder="Full Name" required />
+            <select id="empRole" required>
+              <option value="">Select Role</option>
+              <option value="Key Holder">Key Holder</option>
+              <option value="Non-Key Holder">Non-Key Holder</option>
+            </select>
+            <input
+              type="email"
+              id="empEmail"
+              placeholder="Email Address"
+              required
+            />
+            <input
+              type="tel"
+              id="empPhone"
+              placeholder="Phone Number"
+              required
+            />
+            <div class="popup-buttons">
+              <button type="submit" class="button">Add</button>
+              <button
+                type="button"
+                class="button cancel"
+                onclick="closepopup()"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Edit Employee popup -->
+      <div id="editEmployeeModal" class="popup">
+        <div class="popup-content">
+          <h3>Edit Employee</h3>
+          <form id="editEmployeeForm">
+            <input
+              type="text"
+              id="editEmpName"
+              placeholder="Full Name"
+              required
+            />
+            <input
+              type="email"
+              id="editEmpEmail"
+              placeholder="Email Address"
+              required
+            />
+            <input
+              type="tel"
+              id="editEmpPhone"
+              placeholder="Phone Number"
+              required
+            />
+            <select id="editEmpRole" required>
+              <option value="">Select Role</option>
+              <option value="Key Holder">Key Holder</option>
+              <option value="Non-Key Holder">Non-Key Holder</option>
+            </select>
+            <div class="modal-buttons">
+              <button type="submit" class="button">Save Changes</button>
+              <button
+                type="button"
+                class="button cancel"
+                onclick="closeEditModal()"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      const user = JSON.parse(localStorage.getItem("loggedInUser"));
+
+      if (!user) {
+        // Redirect to login if no one is logged in
+        window.location.href = "login.html";
+      } else if (user.role !== "owner") {
+        alert("Access denied. Employees can't edit the schedule.");
+        window.location.href = "availability.html";
+      }
+
+      function updateEmployeeCount() {
+        const visibleRows = Array.from(employeeTbody.children).filter(
+          (row) => row.style.display !== "none"
+        );
+        document.querySelector(
+          ".employee-list h4"
+        ).textContent = `Employees (${visibleRows.length})`;
+      }
+
+      let employeeList =
+        JSON.parse(localStorage.getItem("crewEmployees")) || [];
+
+      function saveEmployees() {
+        localStorage.setItem("crewEmployees", JSON.stringify(employeeList));
+      }
+
+      //Filter and Sort Functionality
+      const searchInput = document.getElementById("searchInput");
+      const roleFilter = document.getElementById("roleFilter");
+      const table = document.getElementById("employeeTable");
+      const rows = table
+        .getElementsByTagName("tbody")[0]
+        .getElementsByTagName("tr");
+
+      function filterTable() {
+        const searchText = searchInput.value.toLowerCase();
+        const selectedRole = roleFilter.value.toLowerCase();
+
+        Array.from(rows).forEach((row) => {
+          const cells = row.getElementsByTagName("td");
+          const name = cells[0].textContent.toLowerCase();
+          const email = cells[1].textContent.toLowerCase();
+          const phone = cells[2].textContent.toLowerCase();
+          const role = cells[3].textContent.toLowerCase();
+
+          const matchesSearch =
+            name.includes(searchText) ||
+            email.includes(searchText) ||
+            phone.includes(searchText);
+
+          const matchesRole = !selectedRole || role === selectedRole;
+
+          row.style.display = matchesSearch && matchesRole ? "" : "none";
+        });
+        updateEmployeeCount();
+      }
+
+      searchInput.addEventListener("input", filterTable);
+      roleFilter.addEventListener("change", filterTable);
+
+      //Add Employee popup
+      const addpopup = document.getElementById("addEmployeepopup");
+      const addButton = document.querySelector("#editMenu button:nth-child(1)");
+      const addForm = document.getElementById("addEmployeeForm");
+      const employeeTbody = document.querySelector("tbody");
+
+      function openAddPopup() {
+        addpopup.style.display = "flex";
+      }
+
+      addButton.addEventListener("click", openAddPopup);
+
+      function closepopup() {
+        addpopup.style.display = "none";
+        addForm.reset();
+      }
+
+      addForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+
+        const name = document.getElementById("empName").value;
+        const role = document.getElementById("empRole").value;
+        const email = document.getElementById("empEmail").value;
+        const phone = document.getElementById("empPhone").value;
+
+        const newRow = document.createElement("tr");
+        newRow.innerHTML = `
+                <td>${name}</td>
+                <td>${email}</td>
+                <td>${phone}</td>
+                <td>${role}</td>
+              `;
+
+        employeeTbody.appendChild(newRow);
+        employeeList.push({
+          name,
+          email,
+          phone,
+          role,
+          isKeyholder: role === "Key Holder",
+        });
+        saveEmployees();
+        updateEmployeeCount();
+        closepopup();
+      });
+
+      //Edit Employee popup
+      const editModal = document.getElementById("editEmployeeModal");
+      const editForm = document.getElementById("editEmployeeForm");
+      const editButton = document.querySelector(
+        "#editMenu button:nth-child(2)"
+      );
+      const employeeTable = document.querySelector("table");
+
+      let selectedRow = null;
+      let isEditMode = false;
+
+      // Enable "edit mode" on button click
+      function enableEditMode() {
+        isEditMode = true;
+        alert("Edit mode enabled. Click a row to edit.");
+      }
+
+      // Only allow row click when in "edit mode"
+      document
+        .getElementById("employeeTable")
+        .addEventListener("click", (e) => {
+          if (!isEditMode || e.target.tagName !== "TD") return;
+          selectedRow = e.target.closest("tr");
+          const cells = selectedRow.getElementsByTagName("td");
+
+          document.getElementById("editEmpName").value = cells[0].textContent;
+          document.getElementById("editEmpEmail").value = cells[1].textContent;
+          document.getElementById("editEmpPhone").value = cells[2].textContent;
+          document.getElementById("editEmpRole").value = cells[3].textContent;
+
+          document.getElementById("editEmployeeModal").style.display = "flex";
+          isEditMode = false; // turn off edit mode after selecting a row
+        });
+
+      function closeEditModal() {
+        editModal.style.display = "none";
+        editForm.reset();
+        selectedRow = null;
+      }
+
+      editForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+
+        if (selectedRow) {
+          const name = document.getElementById("editEmpName").value;
+          const email = document.getElementById("editEmpEmail").value;
+          const phone = document.getElementById("editEmpPhone").value;
+          const role = document.getElementById("editEmpRole").value;
+
+          // Update DOM
+          const cells = selectedRow.getElementsByTagName("td");
+          cells[0].textContent = name;
+          cells[1].textContent = email;
+          cells[2].textContent = phone;
+          cells[3].textContent = role;
+
+          // Update data model
+          const index = Array.from(employeeTbody.children).indexOf(selectedRow);
+          if (employeeList[index]) {
+            employeeList[index] = {
+              name,
+              email,
+              phone,
+              role,
+              isKeyholder: role === "Key Holder",
+            };
+            saveEmployees();
+          }
+
+          closeEditModal();
+        }
+      });
+
+      // Remove Employee popup
+      let isRemoveMode = false;
+
+      function enableRemoveMode() {
+        alert("Remove mode enabled. Click an employee to delete.");
+        employeeTable.addEventListener("click", removeHandler, { once: true });
+      }
+
+      function removeHandler(e) {
+        if (e.target.tagName !== "TD") return;
+
+        const row = e.target.closest("tr");
+        const index = Array.from(employeeTbody.children).indexOf(row);
+        if (confirm("Are you sure you want to delete this employee?")) {
+          row.remove();
+          employeeList.splice(index, 1);
+          saveEmployees();
+          updateEmployeeCount();
+        }
+
+        // Optional: disable after one removal
+        employeeTable.removeEventListener("click", removeHandler);
+      }
+
+      //Settings panel toggle
+      function toggleSettings() {
+        document.getElementById("settingsPanel").classList.toggle("active");
+      }
+      function toggleTheme() {
+        document.body.classList.toggle("dark");
+        localStorage.setItem(
+          "darkMode",
+          document.body.classList.contains("dark")
+        );
+      }
+      function toggleBalls() {
+        const enabled = document.getElementById("ballsToggle").checked;
+        localStorage.setItem("ballsEnabled", enabled);
+        document.getElementById("ballContainer").style.display = enabled
+          ? "block"
+          : "none";
+      }
+      window.onload = function () {
+        if (localStorage.getItem("darkMode") === "true") {
+          document.body.classList.add("dark");
+          document.getElementById("darkModeToggle").checked = true;
+        }
+        const ballsEnabled = localStorage.getItem("ballsEnabled") !== "false";
+        document.getElementById("ballsToggle").checked = ballsEnabled;
+        document.getElementById("ballContainer").style.display = ballsEnabled
+          ? "block"
+          : "none";
+      };
+      function toggleEditMenu() {
+        const menu = document.getElementById("editMenu");
+        menu.style.display = menu.style.display === "flex" ? "none" : "flex";
+      }
+
+      function loadEmployees() {
+        employeeTbody.innerHTML = "";
+        for (const emp of employeeList) {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${emp.name}</td>
+            <td>${emp.email}</td>
+            <td>${emp.phone}</td>
+            <td>${emp.role}</td>
+          `;
+          employeeTbody.appendChild(row);
+        }
+        updateEmployeeCount();
+      }
+
+      loadEmployees();
+      updateEmployeeCount();
+
+      function logout() {
+        localStorage.removeItem("loggedInUser");
+        window.location.href = "login.html";
+      }
+    </script>
+  </body>
+</html>
