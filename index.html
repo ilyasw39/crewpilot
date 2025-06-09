@@ -366,7 +366,7 @@
       <div class="left-header">
         <div class="logo">
           <button
-            onclick="window.location.href='main.html'"
+            onclick="window.location.href='index.html'"
             style="background: none; border: none; cursor: pointer"
           >
             <img src="/images/plane_blue_nobg.png" alt="CrewPilot Logo" />
@@ -453,7 +453,7 @@
             e.preventDefault();
             localStorage.removeItem("loggedInUser");
             alert("You have been logged out.");
-            window.location.href = "main.html";
+            window.location.href = "index.html";
           };
         } else {
           authButton.textContent = "Login";
