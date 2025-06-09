@@ -561,14 +561,108 @@
         // Redirect to login if no one is logged in
         window.location.href = "login.html";
       } else if (user.role !== "owner") {
-        alert("Access denied. Employees can't edit the schedule.");
-        window.location.href = "availability.html";
+        // For team members, hide edit controls and make calendar read-only
+        document.querySelectorAll('.button').forEach(btn => {
+          if (!btn.classList.contains('view-only')) {
+            btn.style.display = 'none';
+          }
+        });
+        document.getElementById('assignEmpSelect').parentElement.style.display = 'none';
+        document.getElementById('templateManagerModal').style.display = 'none';
+        
+        // Make calendar read-only
+        calendar.setOption('editable', false);
+        calendar.setOption('selectable', false);
       }
 
       let selectedEvent = null;
       let selectedDate = null;
       const employees = JSON.parse(localStorage.getItem("crewEmployees")) || [];
       let storeInfo = {};
+      let hasUnsavedChanges = false;
+
+      // Add save button for owner
+      if (user.role === "owner") {
+        const saveButton = document.createElement('button');
+        saveButton.className = 'button';
+        saveButton.style.position = 'fixed';
+        saveButton.style.bottom = '20px';
+        saveButton.style.right = '20px';
+        saveButton.style.zIndex = '1000';
+        saveButton.style.display = 'none';
+        saveButton.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+        saveButton.onclick = saveChanges;
+        document.body.appendChild(saveButton);
+
+        // Show save button when changes are made
+        const originalSaveScheduledEvents = saveScheduledEvents;
+        saveScheduledEvents = function() {
+          hasUnsavedChanges = true;
+          saveButton.style.display = 'block';
+          originalSaveScheduledEvents();
+        };
+      }
+
+      function saveChanges() {
+        // Save all changes to localStorage
+        const events = calendar.getEvents().map((event) => ({
+          title: event.title,
+          start: event.start.toISOString(),
+          end: event.end.toISOString(),
+        }));
+        localStorage.setItem("scheduledShifts", JSON.stringify(events));
+        
+        // Update the last saved version timestamp
+        localStorage.setItem("lastSavedVersion", new Date().toISOString());
+        
+        hasUnsavedChanges = false;
+        document.querySelector('.button[style*="position: fixed"]').style.display = 'none';
+        
+        // Notify employees of new schedule
+        notifyEmployeesOfNewSchedule();
+      }
+
+      function notifyEmployeesOfNewSchedule() {
+        const employees = JSON.parse(localStorage.getItem("crewEmployees")) || [];
+        const currentWeek = getWeekKey(new Date());
+        
+        employees.forEach(emp => {
+          if (emp.role !== "owner") {
+            // Store notification for employee
+            const notifications = JSON.parse(localStorage.getItem(`notifications_${emp.name}`)) || [];
+            notifications.push({
+              type: 'schedule_update',
+              message: 'New schedule has been published',
+              timestamp: new Date().toISOString(),
+              week: currentWeek
+            });
+            localStorage.setItem(`notifications_${emp.name}`, JSON.stringify(notifications));
+          }
+        });
+      }
+
+      // Check for new schedule version on load
+      window.addEventListener('load', function() {
+        if (user.role !== "owner") {
+          const lastSavedVersion = localStorage.getItem("lastSavedVersion");
+          const lastViewedVersion = localStorage.getItem(`lastViewedVersion_${user.name}`);
+          
+          if (lastSavedVersion && lastViewedVersion && lastSavedVersion > lastViewedVersion) {
+            alert('A new schedule has been published!');
+          }
+          
+          // Update last viewed version
+          localStorage.setItem(`lastViewedVersion_${user.name}`, new Date().toISOString());
+        }
+      });
+
+      window.addEventListener("beforeunload", function(e) {
+        if (hasUnsavedChanges) {
+          e.preventDefault();
+          e.returnValue = '';
+        }
+      });
+
       window.addEventListener("load", () => {
         storeInfo = JSON.parse(localStorage.getItem("storeInfo")) || {};
       });
