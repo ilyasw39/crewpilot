@@ -930,7 +930,15 @@
             const [endHour, endMin] = shift.end.split(':').map(Number);
             endTime.setHours(endHour, endMin, 0, 0);
 
+            // Add validation for shift duration
             const shiftDuration = (endTime - startTime) / (1000 * 60 * 60);
+            if (shiftDuration > 12) {
+              console.log('Invalid shift duration detected:', shiftDuration, 'hours');
+              // Adjust end time to be 12 hours after start time
+              endTime.setTime(startTime.getTime() + (12 * 60 * 60 * 1000));
+              console.log('Adjusted end time to:', endTime.toLocaleTimeString());
+            }
+
             console.log('Shift duration:', shiftDuration, 'hours');
 
             let employee;
