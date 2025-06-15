@@ -92,13 +92,25 @@
       }
 
       header {
-        padding: 1.5rem 2rem;
+        padding: 1rem 2rem;
         display: flex;
         justify-content: space-between;
         align-items: center;
         background: var(--primary-light);
         border-bottom: 1px solid #e5e7eb;
-        z-index: 10;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+      }
+
+      .logo img {
+        max-height: 42px;
+        cursor: pointer;
+        transition: transform 0.3s ease;
+      }
+
+      .logo:hover img {
+        transform: scale(1.05);
       }
 
       .left-header {
@@ -114,54 +126,68 @@
         color: var(--primary);
       }
 
-      .logo img {
-        max-height: 50px;
-        width: auto;
-      }
-
       nav {
         display: flex;
         align-items: center;
+        gap: 1rem;
       }
 
       nav a {
-        margin-left: 1.5rem;
         text-decoration: none;
         font-weight: 600;
         color: var(--text);
-        transition: all 0.2s ease;
+        transition: color 0.2s ease;
+        position: relative;
+        padding: 0.5rem 0;
       }
 
       nav a:hover {
         color: var(--primary);
       }
 
+      nav a::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 0;
+        height: 2px;
+        background: var(--primary);
+        transition: width 0.3s ease;
+      }
+
+      nav a:hover::after {
+        width: 100%;
+      }
+
       nav a.logout {
         background: var(--primary);
         color: white;
-        padding: 0.5rem 1rem;
+        padding: 0.4rem 0.8rem;
         border-radius: var(--radius);
+        transition: background 0.3s ease, transform 0.2s ease;
+      }
+
+      nav a.logout:hover {
+        background: #008a91;
+        transform: translateY(-2px);
       }
 
       .settings-toggle button {
-        margin-left: 1.5rem;
-        background: transparent;
+        background: none;
         border: none;
+        font-size: 1.3rem;
         color: var(--text);
-        font-size: 1.5rem;
         cursor: pointer;
         transition: transform 0.3s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .settings-toggle i {
-        pointer-events: none;
       }
 
       .settings-toggle button:hover {
         transform: rotate(180deg);
+      }
+
+      .settings-toggle i {
+        pointer-events: none;
       }
 
       .settings-panel {
@@ -363,21 +389,15 @@
       <div class="ball-decoration"></div>
     </div>
     <header>
-      <div class="left-header">
-        <div class="logo">
-          <button
-            onclick="window.location.href='index.html'"
-            style="background: none; border: none; cursor: pointer"
-          >
-            <img src="/images/plane_blue_nobg.png" alt="CrewPilot Logo" />
-          </button>
-        </div>
+      <div class="logo" onclick="location.href='index.html'">
+        <img src="images/plane_blue_nobg.png" alt="CrewPilot Logo" />
       </div>
       <nav>
-        <a href="login.html" id="authButton" class="logout">Logout</a>
-        <a href="schedule.html">Schedule</a>
-        <a href="team.html">Team</a>
-        <a href="store.html">Store Info</a>
+        <a id="authButton" class="logout"
+          ><i class="fas fa-sign-out-alt"></i> Logout</a
+        >
+        <a href="schedule.html"><i class="fas fa-calendar-alt"></i> Schedule</a>
+        <a href="team.html"><i class="fas fa-users"></i> Team</a>
         <div class="settings-toggle">
           <button onclick="toggleSettings()">
             <i class="fas fa-cog"></i>
@@ -433,6 +453,54 @@
           : "none";
       }
 
+      function showSuccessMessage(message) {
+        const successDiv = document.createElement("div");
+        successDiv.className = "success-message";
+        successDiv.textContent = message;
+        successDiv.style.cssText = `
+          position: fixed;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          background-color: #4CAF50;
+          color: white;
+          padding: 1rem 2rem;
+          border-radius: var(--radius);
+          z-index: 1000;
+          box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        `;
+        document.body.appendChild(successDiv);
+        setTimeout(() => successDiv.remove(), 3000);
+      }
+
+      function showErrorMessage(message) {
+        const errorDiv = document.createElement("div");
+        errorDiv.className = "error-message";
+        errorDiv.textContent = message;
+        errorDiv.style.cssText = `
+          position: fixed;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          background-color: #dc2626;
+          color: white;
+          padding: 1rem 2rem;
+          border-radius: var(--radius);
+          z-index: 1000;
+          box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        `;
+        document.body.appendChild(errorDiv);
+        setTimeout(() => errorDiv.remove(), 3000);
+      }
+
+      function logout() {
+        localStorage.removeItem("loggedInUser");
+        showSuccessMessage("You have been logged out.");
+        setTimeout(() => {
+          window.location.href = "login.html";
+        }, 1000);
+      }
+
       window.onload = function () {
         if (localStorage.getItem("darkMode") === "true") {
           document.body.classList.add("dark");
@@ -448,16 +516,13 @@
         const authButton = document.getElementById("authButton");
         const loggedInUser = JSON.parse(localStorage.getItem("loggedInUser"));
         if (loggedInUser) {
-          authButton.textContent = "Logout";
-          authButton.onclick = function (e) {
-            e.preventDefault();
-            localStorage.removeItem("loggedInUser");
-            alert("You have been logged out.");
-            window.location.href = "index.html";
-          };
+          authButton.innerHTML = '<i class="fas fa-sign-out-alt"></i> Logout';
+          authButton.onclick = logout;
+          authButton.removeAttribute("href");
         } else {
-          authButton.textContent = "Login";
-          authButton.href = "login.html";
+          authButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login';
+          authButton.onclick = null;
+          authButton.setAttribute("href", "login.html");
         }
       };
     </script>
