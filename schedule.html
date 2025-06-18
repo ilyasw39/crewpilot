@@ -1158,40 +1158,60 @@
       });
 
       function showReassignModal() {
-        const currentEmployee = selectedEvents[0].title.split(" (")[0];
+        const currentTitle = selectedEvents[0].title;
+        const currentEmployee = currentTitle.split(" (")[0];
+        const currentShiftTypeMatch = currentTitle.match(/\((.*?) - /);
+        const currentShiftType = currentShiftTypeMatch
+          ? currentShiftTypeMatch[1]
+          : "Open";
+
         const availableEmployees = employees.filter(
           (emp) => emp.name !== currentEmployee
         );
 
         const modalContent = `
-        <div class="modal-content">
-          <button class="close-popup" onclick="hideModal('reassignModal')">
-            <i class="fas fa-times"></i>
-          </button>
-          <h2>Reassign Shift</h2>
-          <div style="margin-bottom: 1.5rem">
-            <label for="reassignEmpSelect">Select Employee</label>
-            <select id="reassignEmpSelect" class="select">
-              <option value="">Select Employee</option>
-              ${availableEmployees
-                .map(
-                  (emp) => `<option value="${emp.name}">${emp.name}</option>`
-                )
-                .join("")}
-            </select>
-          </div>
-          <div class="button-group">
-            <button class="button" onclick="confirmReassign()">
-              Reassign
-            </button>
-            <button class="button" onclick="hideModal('reassignModal')" style="background: #6b7280">
-              Cancel
-            </button>
-          </div>
-        </div>
-      `;
+    <div class="modal-content">
+      <button class="close-popup" onclick="hideModal('reassignModal')">
+        <i class="fas fa-times"></i>
+      </button>
+      <h2>Reassign Shift</h2>
 
-        // Create modal container
+      <div style="margin-bottom: 1.2rem">
+        <label for="reassignEmpSelect">Select Employee</label>
+        <select id="reassignEmpSelect" class="select">
+          <option value="">Select Employee</option>
+          ${availableEmployees
+            .map((emp) => `<option value="${emp.name}">${emp.name}</option>`)
+            .join("")}
+        </select>
+      </div>
+
+      <div style="margin-bottom: 1.5rem">
+        <label for="reassignShiftType">Shift Type</label>
+        <select id="reassignShiftType" class="select">
+          <option value="Open" ${
+            currentShiftType === "Open" ? "selected" : ""
+          }>Open</option>
+          <option value="Floor" ${
+            currentShiftType === "Floor" ? "selected" : ""
+          }>Floor</option>
+          <option value="Close" ${
+            currentShiftType === "Close" ? "selected" : ""
+          }>Close</option>
+        </select>
+      </div>
+
+      <div class="button-group">
+        <button class="button" onclick="confirmReassign()">
+          Reassign
+        </button>
+        <button class="button" onclick="hideModal('reassignModal')" style="background: #6b7280">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+
         const modal = document.createElement("div");
         modal.id = "reassignModal";
         modal.className = "modal-backdrop active";
@@ -1202,18 +1222,33 @@
       function confirmReassign() {
         const selectedEmployee =
           document.getElementById("reassignEmpSelect").value;
-        if (!selectedEmployee) {
-          alert("Please select an employee.");
+        const selectedShiftType =
+          document.getElementById("reassignShiftType").value;
+
+        if (!selectedEmployee || !selectedShiftType) {
+          alert("Please select both an employee and a shift type.");
           return;
         }
 
         const currentTitle = selectedEvents[0].title;
-        const newTitle = currentTitle.replace(
-          currentTitle.split(" (")[0],
-          selectedEmployee
-        );
+        const oldName = currentTitle.split(" (")[0];
+        const durationMatch = currentTitle.match(/- (\d+(?:\.\d+)?)h/);
+        const duration = durationMatch ? parseFloat(durationMatch[1]) : 5;
+
+        const newTitle = `${selectedEmployee} (${selectedShiftType} - ${duration.toFixed(
+          1
+        )}h)`;
 
         selectedEvents[0].setProp("title", newTitle);
+        selectedEvents[0].setProp(
+          "backgroundColor",
+          getShiftColor(selectedShiftType)
+        );
+        selectedEvents[0].setProp(
+          "borderColor",
+          getShiftColor(selectedShiftType)
+        );
+
         hasUnsavedChanges = true;
         showWeeklyHours();
         hideModal("reassignModal");
