@@ -669,11 +669,13 @@
     </div>
 
     <main>
+      <!-- Page Title -->
       <h1><i class="fas fa-calendar-alt"></i> Schedule</h1>
       <p style="margin-bottom: 1.5rem; color: var(--gray)">
         Plan, assign, and track employee shifts
       </p>
 
+      <!-- Top Controls -->
       <div class="top-controls">
         <div class="button-group">
           <button class="button" onclick="showModal('templateManagerModal')">
@@ -696,8 +698,10 @@
         </div>
       </div>
 
+      <!-- Calendar Section -->
       <div id="calendar"></div>
 
+      <!-- Weekly Hours Section -->
       <div class="weekly-hours">
         <div class="hours-header">
           <div>
@@ -726,6 +730,7 @@
         </div>
       </div>
 
+      <!-- Keyboard Shortcuts Section -->
       <div class="keyboard-shortcuts">
         <h3><i class="fas fa-keyboard"></i> Keyboard Shortcuts</h3>
         <ul>
@@ -799,9 +804,7 @@
             />
           </div>
 
-          <div id="createTemplateContent" style="margin-top: 1.5rem">
-            <!-- Days will be populated dynamically -->
-          </div>
+          <div id="createTemplateContent" style="margin-top: 1.5rem"></div>
         </div>
 
         <div class="button-group">
@@ -829,9 +832,7 @@
           <i class="fas fa-edit"></i> Edit Template
         </h2>
 
-        <div id="editTemplateContent" style="margin-bottom: 1.5rem">
-          <!-- Content will be populated dynamically -->
-        </div>
+        <div id="editTemplateContent" style="margin-bottom: 1.5rem"></div>
 
         <div class="button-group">
           <button class="button" onclick="saveTemplateChanges()">
@@ -937,7 +938,6 @@
           },
           eventClick: function (info) {
             if (user.role === "owner") {
-              // Clear any day selections when clicking an event
               selectedDays.clear();
               calendar.getEvents().forEach((event) => {
                 event.setProp("borderColor", "");
@@ -945,12 +945,10 @@
               });
 
               if (info.jsEvent.shiftKey) {
-                // Add to selection
                 selectedEvents.push(info.event);
                 info.event.setProp("borderColor", "#dc2626");
                 info.event.setProp("borderWidth", "2px");
               } else {
-                // Clear previous selection and select new event
                 selectedEvents.forEach((event) => {
                   event.setProp("borderColor", "");
                   event.setProp("borderWidth", "");
@@ -963,7 +961,6 @@
           },
           select: function (info) {
             if (user.role === "owner") {
-              // Clear previous selection
               selectedEvents.forEach((event) => {
                 event.setProp("borderColor", "");
                 event.setProp("borderWidth", "");
@@ -971,11 +968,9 @@
               selectedEvents = [];
               selectedDays.clear();
 
-              // Add all days in the selection range
               const startDate = new Date(info.start);
               const endDate = new Date(info.end);
-              endDate.setDate(endDate.getDate() - 1); // Adjust end date to be inclusive
-
+              endDate.setDate(endDate.getDate() - 1);
               for (
                 let d = new Date(startDate);
                 d <= endDate;
@@ -1505,7 +1500,7 @@
 
         // Initialize employee hour tracker
         const hoursMap = {};
-        const dailyAssignments = {}; // { dateString: Set of employee names }
+        const dailyAssignments = {};
         employees.forEach((emp) => (hoursMap[emp.name] = 0));
 
         existingEvents.forEach((event) => {
@@ -1585,7 +1580,7 @@
             });
           }
         } else {
-          // Fallback: one opener shift per weekday
+          // Fallback to one opener shift per weekday
           for (let i = 0; i < 5; i++) {
             const currentDate = new Date(currentWeekStart);
             currentDate.setDate(currentWeekStart.getDate() + i);
@@ -1698,7 +1693,6 @@
           templateSelect.appendChild(option);
         }
 
-        // Populate days for create template modal
         populateCreateTemplateDays();
       }
 
@@ -1763,7 +1757,9 @@
           return;
         }
 
-        // Update modal title
+        document.getElementById("editTemplateModal").dataset.templateName =
+          templateName;
+
         document.getElementById(
           "editTemplateTitle"
         ).innerHTML = `<i class="fas fa-edit"></i> Edit Template: ${templateName}`;
@@ -1913,7 +1909,8 @@
       function saveTemplateChanges() {
         const templateTitle =
           document.getElementById("editTemplateTitle").textContent;
-        const templateName = templateTitle.replace("Edit Template: ", "");
+        const templateName =
+          document.getElementById("editTemplateModal").dataset.templateName;
 
         if (!templateName) {
           showErrorMessage("Error: Template not found");
@@ -2053,22 +2050,18 @@
           return event.start >= periodStart && event.start < periodEnd;
         });
 
-        // Removed emoji from title
         let message = `*CrewPilot Schedule* (${view.title})\n\n`;
 
         if (events.length === 0) {
           message += "No shifts scheduled for this period.";
         } else {
-          // Group shifts by employee
           const shiftsByEmployee = {};
 
           events.forEach((event) => {
-            // Extract employee name from title
             const nameMatch = event.title.match(/^(.+?) \(/);
             if (!nameMatch) return;
             const name = nameMatch[1];
 
-            // Extract shift details
             const shiftDetails = event.title.match(/\((.*?)\)/)?.[1] || "";
 
             if (!shiftsByEmployee[name]) {
@@ -2097,20 +2090,16 @@
             });
           });
 
-          // Sort employees alphabetically
           const sortedEmployees = Object.keys(shiftsByEmployee).sort();
 
-          // Format message grouped by employee
           sortedEmployees.forEach((name) => {
             const shifts = shiftsByEmployee[name];
 
-            // Sort shifts chronologically
             shifts.sort((a, b) => a.start - b.start);
 
             message += `*${name}:*\n`;
 
             shifts.forEach((shift) => {
-              // Removed emoji bullet point
               message += `  - ${shift.date}: ${shift.time} (${shift.details})\n`;
             });
 
