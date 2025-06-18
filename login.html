@@ -371,7 +371,7 @@
         const username = document.getElementById("username").value;
         const password = document.getElementById("password").value;
 
-        // First check if it's an owner login
+        // First check for owner login
         const ownerAccounts = { jess: "1212", donna: "3434" };
         if (ownerAccounts[username] && ownerAccounts[username] === password) {
           localStorage.setItem(
@@ -382,7 +382,7 @@
           return;
         }
 
-        // If not an owner, check if it's a team member
+        // If not owner check if it's a team member
         const employees =
           JSON.parse(localStorage.getItem("crewEmployees")) || [];
 
