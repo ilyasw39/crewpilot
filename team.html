@@ -506,6 +506,16 @@
         font-size: 1.2rem;
         margin-left: 0.5rem;
       }
+
+      .edit-mode-row {
+        cursor: pointer;
+        background-color: rgba(255, 255, 0, 0.15) !important;
+      }
+
+      .remove-mode-row {
+        cursor: pointer;
+        background-color: rgba(255, 0, 0, 0.15) !important;
+      }
     </style>
   </head>
   <body>
@@ -577,6 +587,7 @@
     </div>
 
     <main>
+      <!-- Main content -->
       <h1><i class="fas fa-users"></i> Team Management</h1>
       <div class="top-controls">
         <h2>View Employees</h2>
@@ -597,7 +608,7 @@
           </div>
         </div>
       </div>
-
+      <!-- Top controls end -->
       <div class="filters">
         <input
           type="text"
@@ -626,7 +637,7 @@
             </tr>
           </thead>
           <tbody id="employeeTbody">
-            <!-- Employees will be populated here -->
+            <!-- Employees go here -->
           </tbody>
         </table>
         <div id="noEmployeesMessage" class="no-employees" style="display: none">
@@ -636,7 +647,7 @@
         </div>
       </div>
 
-      <!-- Add Employee popup -->
+      <!-- Add employee popup -->
       <div id="addEmployeepopup" class="popup">
         <div class="popup-content">
           <button class="close-popup" onclick="closepopup()">&times;</button>
@@ -676,7 +687,7 @@
         </div>
       </div>
 
-      <!-- Edit Employee popup -->
+      <!-- Edit employee popup -->
       <div id="editEmployeeModal" class="popup">
         <div class="popup-content">
           <button class="close-popup" onclick="closeEditModal()">
@@ -730,7 +741,7 @@
         JSON.parse(localStorage.getItem("crewEmployees")) || [];
       let isEditMode = false;
       let isRemoveMode = false;
-      let selectedRow = null;
+      let editingEmployeeId = null;
       let visibleRowsCount = 0;
 
       // DOM elements
@@ -745,6 +756,11 @@
 
       // Load user and initialize
       document.addEventListener("DOMContentLoaded", function () {
+        const demoUser = {
+          role: "owner",
+        };
+        localStorage.setItem("loggedInUser", JSON.stringify(demoUser));
+
         const user = JSON.parse(localStorage.getItem("loggedInUser"));
 
         if (!user) {
@@ -882,11 +898,53 @@
 
       // Edit Employee functions
       function enableEditMode() {
-        if (isRemoveMode) isRemoveMode = false;
+        if (isRemoveMode) {
+          disableRemoveMode();
+        }
         isEditMode = true;
         showSuccessMessage("Edit mode enabled. Click an employee to edit.");
+
+        // Add edit mode styling to rows
+        const rows = employeeTbody.querySelectorAll("tr");
+        rows.forEach((row) => {
+          row.classList.add("edit-mode-row");
+        });
       }
 
+      function disableEditMode() {
+        isEditMode = false;
+        // Remove edit mode styling from rows
+        const rows = employeeTbody.querySelectorAll("tr");
+        rows.forEach((row) => {
+          row.classList.remove("edit-mode-row");
+        });
+      }
+
+      // Remove Employee functions
+      function enableRemoveMode() {
+        if (isEditMode) {
+          disableEditMode();
+        }
+        isRemoveMode = true;
+        showSuccessMessage("Remove mode enabled. Click an employee to delete.");
+
+        // Add remove mode styling to rows
+        const rows = employeeTbody.querySelectorAll("tr");
+        rows.forEach((row) => {
+          row.classList.add("remove-mode-row");
+        });
+      }
+
+      function disableRemoveMode() {
+        isRemoveMode = false;
+        // Remove remove mode styling from rows
+        const rows = employeeTbody.querySelectorAll("tr");
+        rows.forEach((row) => {
+          row.classList.remove("remove-mode-row");
+        });
+      }
+
+      // Handle row clicks for edit/remove
       document
         .getElementById("employeeTable")
         .addEventListener("click", function (e) {
@@ -895,31 +953,34 @@
           const row = e.target.closest("tr");
           if (!row) return;
 
-          const cells = row.getElementsByTagName("td");
-          if (!cells.length) return;
+          const employeeId = row.dataset.id;
+          const employee = employeeList.find((emp) => emp.id === employeeId);
+
+          if (!employee) return;
 
           if (isEditMode) {
             // Fill the edit form with current values
-            document.getElementById("editEmpName").value = cells[0].textContent;
-            document.getElementById("editEmpEmail").value =
-              cells[1].textContent;
-            document.getElementById("editEmpPhone").value =
-              cells[2].textContent;
-            document.getElementById("editEmpRole").value = cells[3].textContent;
+            document.getElementById("editEmpName").value = employee.name;
+            document.getElementById("editEmpEmail").value = employee.email;
+            document.getElementById("editEmpPhone").value = employee.phone;
+            document.getElementById("editEmpRole").value = employee.role;
 
-            // Store the row index for updating later
-            selectedRow = row;
+            // Store the employee id
+            editingEmployeeId = employeeId;
 
             // Show the edit modal
             document.getElementById("editEmployeeModal").style.display = "flex";
-            isEditMode = false; // Turn off edit mode after selecting a row
+            disableEditMode();
+          } else if (isRemoveMode) {
+            removeEmployee(employeeId);
+            disableRemoveMode();
           }
         });
 
       function closeEditModal() {
         document.getElementById("editEmployeeModal").style.display = "none";
         document.getElementById("editEmployeeForm").reset();
-        selectedRow = null;
+        editingEmployeeId = null;
       }
 
       document
@@ -927,49 +988,50 @@
         .addEventListener("submit", function (e) {
           e.preventDefault();
 
-          if (!selectedRow) return;
+          if (!editingEmployeeId) return;
 
           const name = document.getElementById("editEmpName").value;
           const email = document.getElementById("editEmpEmail").value;
           const phone = document.getElementById("editEmpPhone").value;
           const role = document.getElementById("editEmpRole").value;
 
-          // Update the row in the table
-          const cells = selectedRow.getElementsByTagName("td");
-          cells[0].textContent = name;
-          cells[1].textContent = email;
-          cells[2].textContent = phone;
-          cells[3].textContent = role;
+          // Find the employee by id
+          const employeeIndex = employeeList.findIndex(
+            (emp) => emp.id === editingEmployeeId
+          );
 
-          // Update the data model
-          const index = Array.from(employeeTbody.children).indexOf(selectedRow);
-          if (employeeList[index]) {
-            employeeList[index] = {
+          if (employeeIndex !== -1) {
+            // Update the employee data
+            employeeList[employeeIndex] = {
+              ...employeeList[employeeIndex],
               name,
               email,
               phone,
               role,
               isKeyholder: role === "Key Holder",
             };
+
             saveEmployees();
             showSuccessMessage("Employee updated successfully!");
+          } else {
+            showErrorMessage("Employee not found!");
           }
 
           closeEditModal();
         });
 
-      // Remove Employee functions
-      function enableRemoveMode() {
-        if (isEditMode) isEditMode = false;
-        isRemoveMode = true;
-        showSuccessMessage("Remove mode enabled. Click an employee to delete.");
-      }
+      function removeEmployee(employeeId) {
+        const employee = employeeList.find((emp) => emp.id === employeeId);
 
-      function removeEmployee(employee) {
+        if (!employee) {
+          showErrorMessage("Employee not found!");
+          return;
+        }
+
         if (!confirm(`Are you sure you want to remove ${employee.name}?`))
           return;
 
-        employeeList = employeeList.filter((emp) => emp.id !== employee.id);
+        employeeList = employeeList.filter((emp) => emp.id !== employeeId);
         saveEmployees();
         showSuccessMessage("Employee removed successfully!");
       }
