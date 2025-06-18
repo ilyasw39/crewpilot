@@ -507,14 +507,12 @@
         margin-left: 0.5rem;
       }
 
-      .edit-mode-row {
+      .interactive-row {
         cursor: pointer;
-        background-color: rgba(255, 255, 0, 0.15) !important;
+        transition: background-color 0.2s ease;
       }
-
-      .remove-mode-row {
-        cursor: pointer;
-        background-color: rgba(255, 0, 0, 0.15) !important;
+      .interactive-row.active {
+        background-color: rgba(0, 173, 181, 0.15) !important;
       }
     </style>
   </head>
@@ -587,7 +585,6 @@
     </div>
 
     <main>
-      <!-- Main content -->
       <h1><i class="fas fa-users"></i> Team Management</h1>
       <div class="top-controls">
         <h2>View Employees</h2>
@@ -608,7 +605,7 @@
           </div>
         </div>
       </div>
-      <!-- Top controls end -->
+
       <div class="filters">
         <input
           type="text"
@@ -637,7 +634,7 @@
             </tr>
           </thead>
           <tbody id="employeeTbody">
-            <!-- Employees go here -->
+            <!-- Employees will be populated here -->
           </tbody>
         </table>
         <div id="noEmployeesMessage" class="no-employees" style="display: none">
@@ -647,7 +644,7 @@
         </div>
       </div>
 
-      <!-- Add employee popup -->
+      <!-- Add Employee popup -->
       <div id="addEmployeepopup" class="popup">
         <div class="popup-content">
           <button class="close-popup" onclick="closepopup()">&times;</button>
@@ -687,7 +684,7 @@
         </div>
       </div>
 
-      <!-- Edit employee popup -->
+      <!-- Edit Employee popup -->
       <div id="editEmployeeModal" class="popup">
         <div class="popup-content">
           <button class="close-popup" onclick="closeEditModal()">
@@ -737,11 +734,21 @@
 
     <script>
       // Initialize data
-      let employeeList =
-        JSON.parse(localStorage.getItem("crewEmployees")) || [];
+      employeeList = (
+        JSON.parse(localStorage.getItem("crewEmployees")) || []
+      ).map((emp) => {
+        if (!emp.id) {
+          emp.id =
+            "emp_" +
+            Date.now().toString(36) +
+            Math.random().toString(36).substr(2, 5);
+        }
+        return emp;
+      });
+      localStorage.setItem("crewEmployees", JSON.stringify(employeeList));
       let isEditMode = false;
       let isRemoveMode = false;
-      let editingEmployeeId = null;
+      let selectedRow = null;
       let visibleRowsCount = 0;
 
       // DOM elements
@@ -756,11 +763,6 @@
 
       // Load user and initialize
       document.addEventListener("DOMContentLoaded", function () {
-        const demoUser = {
-          role: "owner",
-        };
-        localStorage.setItem("loggedInUser", JSON.stringify(demoUser));
-
         const user = JSON.parse(localStorage.getItem("loggedInUser"));
 
         if (!user) {
@@ -770,6 +772,8 @@
         // Show edit controls only for owner
         if (user.role === "owner") {
           document.getElementById("editControls").style.display = "block";
+        } else {
+          document.getElementById("editControls").style.display = "none";
         }
 
         // Load employees
@@ -898,53 +902,12 @@
 
       // Edit Employee functions
       function enableEditMode() {
-        if (isRemoveMode) {
-          disableRemoveMode();
-        }
-        isEditMode = true;
-        showSuccessMessage("Edit mode enabled. Click an employee to edit.");
-
-        // Add edit mode styling to rows
-        const rows = employeeTbody.querySelectorAll("tr");
-        rows.forEach((row) => {
-          row.classList.add("edit-mode-row");
-        });
-      }
-
-      function disableEditMode() {
-        isEditMode = false;
-        // Remove edit mode styling from rows
-        const rows = employeeTbody.querySelectorAll("tr");
-        rows.forEach((row) => {
-          row.classList.remove("edit-mode-row");
-        });
-      }
-
-      // Remove Employee functions
-      function enableRemoveMode() {
-        if (isEditMode) {
-          disableEditMode();
-        }
-        isRemoveMode = true;
-        showSuccessMessage("Remove mode enabled. Click an employee to delete.");
-
-        // Add remove mode styling to rows
-        const rows = employeeTbody.querySelectorAll("tr");
-        rows.forEach((row) => {
-          row.classList.add("remove-mode-row");
-        });
-      }
-
-      function disableRemoveMode() {
         isRemoveMode = false;
-        // Remove remove mode styling from rows
-        const rows = employeeTbody.querySelectorAll("tr");
-        rows.forEach((row) => {
-          row.classList.remove("remove-mode-row");
-        });
+        isEditMode = true;
+        highlightInteractiveRows();
+        showSuccessMessage("Edit mode enabled. Click an employee to edit.");
       }
 
-      // Handle row clicks for edit/remove
       document
         .getElementById("employeeTable")
         .addEventListener("click", function (e) {
@@ -960,27 +923,31 @@
 
           if (isEditMode) {
             // Fill the edit form with current values
-            document.getElementById("editEmpName").value = employee.name;
-            document.getElementById("editEmpEmail").value = employee.email;
-            document.getElementById("editEmpPhone").value = employee.phone;
-            document.getElementById("editEmpRole").value = employee.role;
+            const cells = row.getElementsByTagName("td");
+            document.getElementById("editEmpName").value = cells[0].textContent;
+            document.getElementById("editEmpEmail").value =
+              cells[1].textContent;
+            document.getElementById("editEmpPhone").value =
+              cells[2].textContent;
+            document.getElementById("editEmpRole").value = cells[3].textContent;
 
-            // Store the employee id
-            editingEmployeeId = employeeId;
+            // Store the row reference
+            selectedRow = employee.id;
 
             // Show the edit modal
             document.getElementById("editEmployeeModal").style.display = "flex";
-            disableEditMode();
+            isEditMode = false;
           } else if (isRemoveMode) {
-            removeEmployee(employeeId);
-            disableRemoveMode();
+            removeEmployee(employee);
+            isRemoveMode = false; // Turn off remove mode after action
           }
         });
 
       function closeEditModal() {
         document.getElementById("editEmployeeModal").style.display = "none";
         document.getElementById("editEmployeeForm").reset();
-        editingEmployeeId = null;
+        selectedRow = null;
+        clearRowHighlights();
       }
 
       document
@@ -988,51 +955,49 @@
         .addEventListener("submit", function (e) {
           e.preventDefault();
 
-          if (!editingEmployeeId) return;
+          if (!selectedRow) return;
 
           const name = document.getElementById("editEmpName").value;
           const email = document.getElementById("editEmpEmail").value;
           const phone = document.getElementById("editEmpPhone").value;
           const role = document.getElementById("editEmpRole").value;
 
-          // Find the employee by id
-          const employeeIndex = employeeList.findIndex(
-            (emp) => emp.id === editingEmployeeId
-          );
-
-          if (employeeIndex !== -1) {
-            // Update the employee data
-            employeeList[employeeIndex] = {
-              ...employeeList[employeeIndex],
+          // Update the row in the table
+          const employeeId = selectedRow;
+          const index = employeeList.findIndex((emp) => emp.id === employeeId);
+          if (index !== -1) {
+            employeeList[index] = {
+              ...employeeList[index],
               name,
               email,
               phone,
               role,
               isKeyholder: role === "Key Holder",
             };
-
             saveEmployees();
+            renderEmployeeTable();
             showSuccessMessage("Employee updated successfully!");
-          } else {
-            showErrorMessage("Employee not found!");
           }
 
           closeEditModal();
         });
 
-      function removeEmployee(employeeId) {
-        const employee = employeeList.find((emp) => emp.id === employeeId);
+      // Remove Employee functions
+      function enableRemoveMode() {
+        isEditMode = false;
+        isRemoveMode = true;
+        highlightInteractiveRows();
+        showSuccessMessage("Remove mode enabled. Click an employee to delete.");
+      }
 
-        if (!employee) {
-          showErrorMessage("Employee not found!");
-          return;
-        }
-
+      function removeEmployee(employee) {
         if (!confirm(`Are you sure you want to remove ${employee.name}?`))
           return;
 
-        employeeList = employeeList.filter((emp) => emp.id !== employeeId);
+        employeeList = employeeList.filter((emp) => emp.id !== employee.id);
         saveEmployees();
+        renderEmployeeTable();
+        clearRowHighlights();
         showSuccessMessage("Employee removed successfully!");
       }
 
@@ -1083,6 +1048,26 @@
       function toggleEditMenu() {
         const menu = document.getElementById("editMenu");
         menu.style.display = menu.style.display === "flex" ? "none" : "flex";
+      }
+
+      function highlightInteractiveRows() {
+        const rows = document.querySelectorAll("#employeeTbody tr");
+        rows.forEach((row) => {
+          row.classList.add("interactive-row");
+          row.addEventListener("mouseenter", () => row.classList.add("active"));
+          row.addEventListener("mouseleave", () =>
+            row.classList.remove("active")
+          );
+        });
+      }
+
+      function clearRowHighlights() {
+        const rows = document.querySelectorAll("#employeeTbody tr");
+        rows.forEach((row) => {
+          row.classList.remove("interactive-row", "active");
+          row.removeEventListener("mouseenter", () => {});
+          row.removeEventListener("mouseleave", () => {});
+        });
       }
 
       function logout() {
