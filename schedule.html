@@ -17,6 +17,7 @@
       rel="stylesheet"
     />
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
       :root {
         --primary: #00adb5;
@@ -687,6 +688,12 @@
           <button class="button whatsapp" onclick="sendScheduleToWhatsApp()">
             <i class="fab fa-whatsapp"></i> Share via WhatsApp
           </button>
+          <button
+            class="button whatsapp"
+            onclick="sendImageScheduleToWhatsApp()"
+          >
+            <i class="fas fa-file-image"></i> Send as Image
+          </button>
         </div>
         <div class="assign-controls">
           <select id="assignEmpSelect" class="select">
@@ -848,6 +855,31 @@
         </div>
       </div>
     </div>
+
+    <!-- Schedule Image -->
+    <div
+      id="scheduleImagePreview"
+      style="display: none; padding: 1rem; font-family: 'Arial'"
+    >
+      <table
+        style="border-collapse: collapse; width: 100%; font-size: 14px"
+        border="1"
+      >
+        <thead>
+          <tr style="background: #e2e8f0">
+            <th style="padding: 8px">DATE</th>
+            <th style="padding: 8px">SHIFT</th>
+            <th style="padding: 8px">STAFF</th>
+          </tr>
+        </thead>
+        <tbody id="scheduleTableBody"></tbody>
+      </table>
+    </div>
+
+    <div
+      id="imagePagesContainer"
+      style="display: none; font-family: 'Arial'; font-size: 14px"
+    ></div>
 
     <script>
       let calendar;
@@ -2145,6 +2177,111 @@
         const encoded = encodeURIComponent(message);
         const url = `https://wa.me/?text=${encoded}`;
         window.open(url, "_blank");
+      }
+
+      function sendImageScheduleToWhatsApp() {
+        const events = calendar.getEvents().sort((a, b) => a.start - b.start);
+        const container = document.getElementById("imagePagesContainer");
+        container.innerHTML = "";
+        container.style.display = "block";
+
+        const chunkSize = 10; // rows per page
+        const chunks = [];
+
+        for (let i = 0; i < events.length; i += chunkSize) {
+          chunks.push(events.slice(i, i + chunkSize));
+        }
+
+        chunks.forEach((chunk) => {
+          const page = document.createElement("div");
+          page.style.display = "inline-block";
+          page.style.width = "fit-content";
+          page.style.height = "fit-content";
+          page.style.boxSizing = "border-box";
+          page.style.fontSize = "14px";
+          page.style.fontFamily = "Arial, sans-serif";
+          page.style.padding = "0";
+          page.style.margin = "0";
+
+          page.innerHTML = `
+      <table style="border-collapse: collapse; font-size: 14px;" border="1">
+        <thead>
+          <tr style="background: #e2e8f0;">
+            <th style="padding: 4px 8px;">DATE</th>
+            <th style="padding: 4px 8px;">TIME</th>
+            <th style="padding: 4px 8px;">STAFF</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${chunk
+            .map((event) => {
+              const date = event.start.toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+              });
+              const start = event.start.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+              const end = event.end.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+
+              const staff = event.title.split(" (")[0];
+
+              return `
+              <tr>
+                <td style="padding: 4px 8px;">${date}</td>
+                <td style="padding: 4px 8px;">${start}–${end}</td>
+                <td style="padding: 4px 8px;">${staff}</td>
+              </tr>`;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    `;
+          container.appendChild(page);
+        });
+
+        const pages = Array.from(container.children);
+        const openTab = window.open("", "_blank");
+        openTab.document.write(
+          "<h3 style='font-family:Arial;'>Schedule Images:</h3>"
+        );
+
+        let index = 0;
+
+        function captureNextPage() {
+          if (index >= pages.length) {
+            container.style.display = "none";
+            return;
+          }
+
+          setTimeout(() => {
+            html2canvas(pages[index], {
+              backgroundColor: null,
+              useCORS: true,
+              scale: 2,
+              scrollX: 0,
+              scrollY: 0,
+              windowWidth: pages[index].scrollWidth,
+              windowHeight: pages[index].scrollHeight,
+            }).then((canvas) => {
+              const img = canvas.toDataURL("image/png");
+              openTab.document.write(
+                `<img src="${img}" style="display:block; margin: 0 auto 20px auto;" /><hr/>`
+              );
+              index++;
+              captureNextPage();
+            });
+          }, 150);
+        }
+
+        setTimeout(() => {
+          captureNextPage();
+        }, 200);
       }
     </script>
   </body>
