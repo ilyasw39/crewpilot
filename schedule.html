@@ -1203,7 +1203,7 @@
 
         const modalContent = `
     <div class="modal-content">
-      <button class="close-popup" onclick="hideModal('reassignModal')">
+      <button class="close-popup" onclick="removeReassignModal()"">
         <i class="fas fa-times"></i>
       </button>
       <h2>Reassign Shift</h2>
@@ -1237,7 +1237,7 @@
         <button class="button" onclick="confirmReassign()">
           Reassign
         </button>
-        <button class="button" onclick="hideModal('reassignModal')" style="background: #6b7280">
+        <button class="button" onclick="removeReassignModal()" style="background: #6b7280">
           Cancel
         </button>
       </div>
@@ -1283,7 +1283,7 @@
 
         hasUnsavedChanges = true;
         showWeeklyHours();
-        hideModal("reassignModal");
+        removeReassignModal(); 
         showSuccessMessage("Shift reassigned successfully!");
       }
 
@@ -2282,6 +2282,10 @@
         setTimeout(() => {
           captureNextPage();
         }, 200);
+      }
+      function removeReassignModal() {
+        const modal = document.getElementById("reassignModal");
+        if (modal) modal.remove();
       }
     </script>
   </body>
