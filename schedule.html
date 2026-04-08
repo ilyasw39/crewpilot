@@ -969,7 +969,17 @@
         swapRequests: [],
         user: null,
       };
+      function normalizeUserRole(role) {
+        const normalized = String(role || "").toLowerCase();
+        if (normalized === "owner" || normalized === "manager") return normalized;
+        return "employee";
+      }
+      function normalizeUser(userObj) {
+        if (!userObj || typeof userObj !== "object") return null;
+        return { ...userObj, role: normalizeUserRole(userObj.role) };
+      }
       function initializeState() {
+        const latestLoggedIn = normalizeUser(safeParse("loggedInUser", null));
         const stored = safeParse("appState", null);
         if (stored && typeof stored === "object") {
           AppState.employees = Array.isArray(stored.employees)
@@ -984,14 +994,14 @@
           AppState.swapRequests = Array.isArray(stored.swapRequests)
             ? stored.swapRequests
             : safeParse("swapRequests");
-          AppState.user = stored.user || safeParse("loggedInUser", null);
+          AppState.user = latestLoggedIn || normalizeUser(stored.user);
           return;
         }
         AppState.employees = safeParse("crewEmployees");
         AppState.events = safeParse("scheduledShifts");
         AppState.swapPool = safeParse("swapPool");
         AppState.swapRequests = safeParse("swapRequests");
-        AppState.user = safeParse("loggedInUser", null);
+        AppState.user = latestLoggedIn;
       }
       function syncState() {
         localStorage.setItem("appState", JSON.stringify(AppState));
@@ -1499,6 +1509,8 @@
         if (!user) {
           window.location.href = "login.html";
         }
+        if (!user.role) user.role = "employee";
+        console.log("USER:", user);
 
         // Initialize calendar
         const calendarEl = document.getElementById("calendar");
