@@ -789,6 +789,12 @@
         ".visible-rows-count"
       );
 
+      function normalizeRole(role) {
+        const normalized = String(role || "").toLowerCase();
+        if (normalized === "owner" || normalized === "manager") return normalized;
+        return "employee";
+      }
+
       // Load user and initialize
       document.addEventListener("DOMContentLoaded", function () {
         currentUser = JSON.parse(localStorage.getItem("loggedInUser"));
@@ -796,6 +802,9 @@
         if (!currentUser) {
           window.location.href = "login.html";
         }
+
+        if (currentUser && !currentUser.role) currentUser.role = "employee";
+        if (currentUser) currentUser.role = normalizeRole(currentUser.role);
 
         const editButtons = document.querySelectorAll(".owner-only");
         editButtons.forEach((btn) => {
