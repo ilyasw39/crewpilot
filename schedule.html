@@ -342,6 +342,47 @@
         color: #f3f4f6;
       }
 
+      .swap-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-top: 1.5rem;
+      }
+
+      .swap-box {
+        background: var(--primary-light);
+        padding: 1rem;
+        border-radius: var(--radius);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        min-height: 120px;
+      }
+
+      .swap-box ul {
+        list-style: none;
+        padding: 0;
+        margin-top: 0.5rem;
+      }
+
+      .swap-box li {
+        background: var(--background);
+        padding: 0.5rem 0.7rem;
+        margin-bottom: 0.4rem;
+        border-radius: var(--radius);
+        font-size: 0.9rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .swap-box .button {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.8rem;
+      }
+
+      .swap-box:has(li:only-child) {
+        min-height: auto;
+      }
+
       .button {
         background: var(--primary);
         color: white;
@@ -708,25 +749,6 @@
           </button>
         </div>
       </div>
-      <div class="weekly-hours">
-        <div class="hours-header">
-          <div>
-            <h2>Available Shifts</h2>
-            <div>Swap pool (auto-expires within 24h of shift start)</div>
-          </div>
-        </div>
-        <ul id="swapPoolList"></ul>
-      </div>
-      <div class="weekly-hours">
-        <div class="hours-header">
-          <div>
-            <h2>Swap Requests</h2>
-            <div>Incoming direct requests for your approval</div>
-          </div>
-        </div>
-        <ul id="swapRequestsList"></ul>
-      </div>
-
       <!-- Calendar Section -->
       <div id="calendar"></div>
 
@@ -756,6 +778,28 @@
           <i class="fas fa-users-slash"></i>
           <h3>No Hours Recorded</h3>
           <p>Assign shifts to see employee hours</p>
+        </div>
+      </div>
+
+      <div class="swap-section">
+        <div class="swap-box">
+          <div class="hours-header">
+            <div>
+              <h2>Shift Pool</h2>
+              <div>Swap pool (auto-expires within 24h of shift start)</div>
+            </div>
+          </div>
+          <ul id="swapPoolList"></ul>
+        </div>
+
+        <div class="swap-box">
+          <div class="hours-header">
+            <div>
+              <h2>Approval Requests</h2>
+              <div>Incoming direct requests for your approval</div>
+            </div>
+          </div>
+          <ul id="swapRequestsList"></ul>
         </div>
       </div>
 
@@ -1035,7 +1079,7 @@
         if (!list) return;
         list.innerHTML = "";
         if (AppState.swapPool.length === 0) {
-          list.innerHTML = "<li>No available shifts in pool.</li>";
+          list.innerHTML = "<li style='opacity:0.6'>No shifts available</li>";
           return;
         }
         AppState.swapPool
@@ -1063,6 +1107,7 @@
       }
 
       function updateNotifications() {
+        if (user.role === "employee") return;
         const count = AppState.swapRequests.filter(
           (r) => r.toEmployee === user.name && r.status === "pending"
         ).length;
@@ -1384,15 +1429,20 @@
       function renderSwapRequests() {
         const list = document.getElementById("swapRequestsList");
         if (!list) return;
-        const myRequests = AppState.swapRequests.filter(
-          (r) => r.toEmployee === user.name && r.status === "pending"
-        );
+        let requests;
+        if (user.role === "owner" || user.role === "manager") {
+          requests = AppState.swapRequests.filter((r) => r.status === "pending");
+        } else {
+          requests = AppState.swapRequests.filter(
+            (r) => r.toEmployee === user.name && r.status === "pending"
+          );
+        }
         list.innerHTML = "";
-        if (myRequests.length === 0) {
-          list.innerHTML = "<li>No incoming swap requests.</li>";
+        if (requests.length === 0) {
+          list.innerHTML = "<li style='opacity:0.6'>No requests</li>";
           return;
         }
-        myRequests.forEach((req) => {
+        requests.forEach((req) => {
           const event = getAllEvents().find((e) => e.id === req.shiftId);
           const shiftInfo = event
             ? `${event.start.toLocaleDateString("en-US", {
@@ -1409,11 +1459,17 @@
             : "Shift no longer exists";
           const li = document.createElement("li");
           li.innerHTML = `
-            <span>${req.fromEmployee} -> ${req.toEmployee} | ${shiftInfo}</span>
-            <div>
-              <button class="button view-only small" onclick="acceptSwap(${req.id})">Accept</button>
-              <button class="button view-only small" onclick="rejectSwap(${req.id})" style="background:#6b7280;">Reject</button>
-            </div>
+            <span>${req.fromEmployee} → ${req.toEmployee} | ${shiftInfo}</span>
+            ${
+              user.role !== "employee"
+                ? `
+              <div>
+                <button class="button view-only small" onclick="acceptSwap('${req.id}')">Accept</button>
+                <button class="button view-only small" onclick="rejectSwap('${req.id}')" style="background:#6b7280;">Reject</button>
+              </div>
+            `
+                : ""
+            }
           `;
           list.appendChild(li);
         });
@@ -1635,6 +1691,19 @@
         renderSwapPool();
         renderSwapRequests();
         updateNotifications();
+
+        const swapPoolBox = document
+          .getElementById("swapPoolList")
+          ?.closest(".swap-box");
+        const swapRequestsBox = document
+          .getElementById("swapRequestsList")
+          ?.closest(".swap-box");
+        if (user.role === "employee") {
+          if (swapRequestsBox) swapRequestsBox.style.display = "none";
+        }
+        if (user.role === "owner" || user.role === "manager") {
+          if (swapPoolBox) swapPoolBox.style.display = "none";
+        }
 
         // Save changes when leaving page
         window.addEventListener("beforeunload", function (e) {
