@@ -891,6 +891,16 @@
       let visibleHoursCount = 0;
       let user = JSON.parse(localStorage.getItem("loggedInUser"));
 
+      function getEmployeeFromEvent(event) {
+        if (event.extendedProps?.employee) return event.extendedProps.employee;
+        return "";
+      }
+
+      function getShiftTypeFromEvent(event) {
+        if (event.extendedProps?.shiftType) return event.extendedProps.shiftType;
+        return "Open";
+      }
+
       // Modal functions
       function showModal(modalId) {
         hideAllModals();
@@ -1047,11 +1057,13 @@
           eventDrop: function (info) {
             updateEventTitle(info.event);
             hasUnsavedChanges = true;
+            saveEventsToLocalStorage();
             showWeeklyHours();
           },
           eventResize: function (info) {
             updateEventTitle(info.event);
             hasUnsavedChanges = true;
+            saveEventsToLocalStorage();
             showWeeklyHours();
           },
         });
@@ -1125,12 +1137,16 @@
               selectedEvents.forEach((event) => {
                 const newEvent = calendar.addEvent({
                   title: event.title,
-                  start: new Date(event.start),
-                  end: new Date(event.end),
+                  start: new Date(event.start.getTime() + 24 * 60 * 60 * 1000),
+                  end: new Date(event.end.getTime() + 24 * 60 * 60 * 1000),
                   backgroundColor: event.backgroundColor,
                   borderColor: event.borderColor,
                   textColor: event.textColor,
                   display: "block",
+                  extendedProps: {
+                    employee: getEmployeeFromEvent(event),
+                    shiftType: getShiftTypeFromEvent(event),
+                  },
                 });
                 event.setProp("borderColor", "");
                 newEvent.setProp("borderColor", "#dc2626");
@@ -1169,12 +1185,12 @@
                   : `Are you sure you want to delete ${selectedEvents.length} shifts?`;
 
               if (confirm(message)) {
+                const count = selectedEvents.length;
                 selectedEvents.forEach((event) => event.remove());
                 selectedEvents = [];
                 hasUnsavedChanges = true;
                 showWeeklyHours();
-                showSuccessMessage(`Deleted ${selectedEvents.length} shifts`);
-              }
+                showSuccessMessage(`Deleted ${count} shifts`);              }
             } else {
               showErrorMessage("No days or shifts selected");
             }
@@ -1190,8 +1206,6 @@
       });
 
       function showReassignModal() {
-        removeReassignModal(); // always kill any old modal first
-
         const currentTitle = selectedEvents[0].title;
         const currentEmployee = currentTitle.split(" (")[0];
         const currentShiftTypeMatch = currentTitle.match(/\((.*?) - /);
@@ -1204,39 +1218,47 @@
         );
 
         const modalContent = `
-          <div class="modal-content">
-            <button class="close-popup" onclick="removeReassignModal()">
-              <i class="fas fa-times"></i>
-            </button>
-            <h2>Reassign Shift</h2>
+    <div class="modal-content">
+      <button class="close-popup" onclick="removeReassignModal()">
+        <i class="fas fa-times"></i>
+      </button>
+      <h2>Reassign Shift</h2>
 
-            <div style="margin-bottom: 1.2rem">
-              <label for="reassignEmpSelect">Select Employee</label>
-              <select id="reassignEmpSelect" class="select">
-                <option value="">Select Employee</option>
-                ${availableEmployees
-                  .map((emp) => `<option value="${emp.name}">${emp.name}</option>`)
-                  .join("")}
-              </select>
-            </div>
+      <div style="margin-bottom: 1.2rem">
+        <label for="reassignEmpSelect">Select Employee</label>
+        <select id="reassignEmpSelect" class="select">
+          <option value="">Select Employee</option>
+          ${availableEmployees
+            .map((emp) => `<option value="${emp.name}">${emp.name}</option>`)
+            .join("")}
+        </select>
+      </div>
 
-            <div style="margin-bottom: 1.5rem">
-              <label for="reassignShiftType">Shift Type</label>
-              <select id="reassignShiftType" class="select">
-                <option value="Open" ${currentShiftType === "Open" ? "selected" : ""}>Open</option>
-                <option value="Floor" ${currentShiftType === "Floor" ? "selected" : ""}>Floor</option>
-                <option value="Close" ${currentShiftType === "Close" ? "selected" : ""}>Close</option>
-              </select>
-            </div>
+      <div style="margin-bottom: 1.5rem">
+        <label for="reassignShiftType">Shift Type</label>
+        <select id="reassignShiftType" class="select">
+          <option value="Open" ${
+            currentShiftType === "Open" ? "selected" : ""
+          }>Open</option>
+          <option value="Floor" ${
+            currentShiftType === "Floor" ? "selected" : ""
+          }>Floor</option>
+          <option value="Close" ${
+            currentShiftType === "Close" ? "selected" : ""
+          }>Close</option>
+        </select>
+      </div>
 
-            <div class="button-group">
-              <button class="button" onclick="confirmReassign()">Reassign</button>
-              <button class="button" onclick="removeReassignModal()" style="background: #6b7280">
-                Cancel
-              </button>
-            </div>
-          </div>
-        `;
+      <div class="button-group">
+        <button class="button" onclick="confirmReassign()">
+          Reassign
+        </button>
+        <button class="button" onclick="removeReassignModal()" style="background: #6b7280">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
 
         const modal = document.createElement("div");
         modal.id = "reassignModal";
@@ -1246,39 +1268,44 @@
       }
 
       function confirmReassign() {
-        const employeeSelect = document.getElementById("reassignEmpSelect");
-        const shiftTypeSelect = document.getElementById("reassignShiftType");
+        const empEl = document.getElementById("reassignEmpSelect");
+        const typeEl = document.getElementById("reassignShiftType");
 
-        if (!employeeSelect || !shiftTypeSelect || selectedEvents.length !== 1) {
-          showErrorMessage("Unable to reassign shift.");
-          removeReassignModal();
+        if (!empEl || !typeEl || selectedEvents.length !== 1) {
+          showErrorMessage("Invalid reassignment");
           return;
         }
 
-        const selectedEmployee = employeeSelect.value;
-        const selectedShiftType = shiftTypeSelect.value;
+        const selectedEmployee = empEl.value;
+        const selectedShiftType = typeEl.value;
 
         if (!selectedEmployee || !selectedShiftType) {
-          showErrorMessage("Please select both an employee and a shift type.");
+          alert("Please select both an employee and a shift type.");
           return;
         }
 
-        const event = selectedEvents[0];
-        const currentTitle = event.title;
+        const currentTitle = selectedEvents[0].title;
+        const oldName = currentTitle.split(" (")[0];
         const durationMatch = currentTitle.match(/- (\d+(?:\.\d+)?)h/);
         const duration = durationMatch ? parseFloat(durationMatch[1]) : 5;
 
-        const newTitle = `${selectedEmployee} (${selectedShiftType} - ${duration.toFixed(1)}h)`;
+        const newTitle = `${selectedEmployee} (${selectedShiftType} - ${duration.toFixed(
+          1
+        )}h)`;
 
-        event.setProp("title", newTitle);
-        event.setProp("backgroundColor", getShiftColor(selectedShiftType));
-        event.setProp("borderColor", "#dc2626");
-        event.setProp("textColor", "#ffffff");
+        selectedEvents[0].setProp("title", newTitle);
+        selectedEvents[0].setProp(
+          "backgroundColor",
+          getShiftColor(selectedShiftType)
+        );
+        selectedEvents[0].setProp(
+          "borderColor",
+          getShiftColor(selectedShiftType)
+        );
 
         hasUnsavedChanges = true;
-        saveEventsToLocalStorage();
         showWeeklyHours();
-        removeReassignModal();
+        removeReassignModal(); 
         showSuccessMessage("Shift reassigned successfully!");
       }
 
@@ -1331,9 +1358,8 @@
         let totalHours = 0;
 
         events.forEach((event) => {
-          const nameMatch = event.title.match(/^(.+?) \(/);
-          if (!nameMatch) return;
-          const name = nameMatch[1];
+          const name = getEmployeeFromEvent(event);
+          if (!name) return;
           const duration = (event.end - event.start) / (1000 * 60 * 60);
 
           if (!hoursPerPerson[name]) hoursPerPerson[name] = 0;
@@ -1407,8 +1433,13 @@
       // Update event title
       function updateEventTitle(event) {
         const duration = (event.end - event.start) / (1000 * 60 * 60);
-        const titleParts = event.title.split(" (");
-        const newTitle = `${titleParts[0]} (${duration.toFixed(1)}h)`;
+        const shiftType = getShiftTypeFromEvent(event);
+        const name = getEmployeeFromEvent(event);
+
+        const newTitle = `${name} (${shiftType} - ${duration.toFixed(1)}h)`;
+
+        event.setExtendedProp("employee", name);
+        event.setExtendedProp("shiftType", shiftType);
         event.setProp("title", newTitle);
       }
 
@@ -1477,6 +1508,10 @@
             borderColor: getShiftColor("Open"),
             textColor: "#ffffff",
             display: "block",
+            extendedProps: {
+              employee: emp.name,
+              shiftType: "Open",
+            },
           });
 
           // Save to localStorage
@@ -1509,6 +1544,10 @@
           borderColor: event.borderColor,
           textColor: event.textColor,
           display: "block",
+          extendedProps: {
+            employee: getEmployeeFromEvent(event),
+            shiftType: getShiftTypeFromEvent(event),
+          },
         }));
         localStorage.setItem("scheduledShifts", JSON.stringify(events));
       }
@@ -1529,165 +1568,277 @@
 
       // Generate schedule
       function generateSchedule() {
-        const templates =
-          JSON.parse(localStorage.getItem("scheduleTemplates")) || {};
-        const selectedTemplate =
-          localStorage.getItem("selectedTemplate") || null;
+        if (window.isGenerating) return;
+        window.isGenerating = true;
+        let bestSchedule = null;
+        let bestScore = Infinity;
+        const MAX_SHIFTS_PER_DAY = 1;
+        const MIN_REST_HOURS = 10;
+        const MIN_REST_MS = MIN_REST_HOURS * 60 * 60 * 1000;
+        const ATTEMPTS = 120;
+        let bestMissingShifts = [];
 
         if (employees.length === 0) {
-          showErrorMessage("No employees available to assign shifts");
+          showErrorMessage("No employees available");
+          window.isGenerating = false;
           return;
         }
 
-        // Find the first unscheduled week
         const today = new Date();
-        let currentWeekStart = new Date(today);
-        currentWeekStart.setDate(today.getDate() - today.getDay());
-        currentWeekStart.setHours(0, 0, 0, 0);
+        const targetWeekStart = new Date(today);
+        targetWeekStart.setDate(today.getDate() - today.getDay());
+        targetWeekStart.setHours(0, 0, 0, 0);
 
-        const existingEvents = calendar.getEvents();
+        const allEvents = calendar.getEvents();
         while (true) {
-          const weekEnd = new Date(currentWeekStart);
-          weekEnd.setDate(currentWeekStart.getDate() + 6);
+          const weekEnd = new Date(targetWeekStart);
+          weekEnd.setDate(targetWeekStart.getDate() + 6);
           weekEnd.setHours(23, 59, 59, 999);
 
-          const weekShifts = existingEvents.filter((event) => {
+          const weekShifts = allEvents.filter((event) => {
             const date = new Date(event.start);
-            return date >= currentWeekStart && date <= weekEnd;
+            return date >= targetWeekStart && date <= weekEnd;
           });
 
           if (weekShifts.length === 0) break;
-          currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+          targetWeekStart.setDate(targetWeekStart.getDate() + 7);
         }
 
-        // Initialize employee hour tracker
-        const hoursMap = {};
-        const dailyAssignments = {};
-        employees.forEach((emp) => (hoursMap[emp.name] = 0));
+        for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+          let generatedEvents = [];
+          let missingShifts = [];
+          const lastShiftEndMap = {};
+          const templates =
+            JSON.parse(localStorage.getItem("scheduleTemplates")) || {};
+          const selectedTemplate =
+            localStorage.getItem("selectedTemplate") || null;
 
-        existingEvents.forEach((event) => {
-          const start = new Date(event.start);
-          const end = new Date(event.end);
-          const dateKey = start.toDateString();
-          const match = event.title.match(/^(.+?) \(/);
-          if (!match) return;
-          const name = match[1];
-          const hours = (end - start) / (1000 * 60 * 60);
-          hoursMap[name] = (hoursMap[name] || 0) + hours;
-          if (!dailyAssignments[dateKey]) dailyAssignments[dateKey] = new Set();
-          dailyAssignments[dateKey].add(name);
-        });
+          const currentWeekStart = new Date(targetWeekStart);
+          const existingEvents = calendar.getEvents();
 
-        if (selectedTemplate && templates[selectedTemplate]) {
-          const template = templates[selectedTemplate];
+          // Initialize employee hour tracker
+          const hoursMap = {};
+          const dailyAssignments = {};
+          employees.forEach((emp) => (hoursMap[emp.name] = 0));
 
-          for (let i = 0; i < 7; i++) {
-            const currentDate = new Date(currentWeekStart);
-            currentDate.setDate(currentWeekStart.getDate() + i);
-            const dateKey = currentDate.toDateString();
-            const dayName = currentDate
-              .toLocaleDateString("en-US", { weekday: "long" })
-              .toLowerCase();
+          // ===== HISTORY (controlled + safe) =====
+          const HISTORY_DAYS = 7;
+          const HISTORY_WEIGHT = 0.4;
 
-            if (!template.days[dayName] || !template.days[dayName].enabled)
-              continue;
+          const cutoff = new Date();
+          cutoff.setDate(cutoff.getDate() - HISTORY_DAYS);
 
-            template.days[dayName].shifts.forEach((shift) => {
-              const startTime = new Date(currentDate);
-              const [sh, sm] = shift.startTime.split(":");
-              startTime.setHours(parseInt(sh), parseInt(sm));
+          existingEvents.forEach((event) => {
+            const start = new Date(event.start);
 
-              const endTime = new Date(currentDate);
-              const [eh, em] = shift.endTime.split(":");
-              endTime.setHours(parseInt(eh), parseInt(em));
+            if (start < cutoff) return; // ignore old data
 
-              const duration = (endTime - startTime) / (1000 * 60 * 60);
+            const end = new Date(event.end);
+            const name = getEmployeeFromEvent(event);
+            if (!name) return;
+            const hours = (end - start) / (1000 * 60 * 60);
 
-              // Filter available employees
-              let available = employees.filter((emp) => {
-                if (
-                  (shift.type === "Open" || shift.type === "Close") &&
-                  !emp.isKeyholder
-                )
-                  return false;
-                if (dailyAssignments[dateKey]?.has(emp.name)) return false;
-                return true;
+            // apply weighted history
+            hoursMap[name] = (hoursMap[name] || 0) + hours * HISTORY_WEIGHT;
+            if (!lastShiftEndMap[name] || end > lastShiftEndMap[name]) {
+              lastShiftEndMap[name] = end;
+            }
+          });
+
+          if (selectedTemplate && templates[selectedTemplate]) {
+            const template = templates[selectedTemplate];
+
+            for (let i = 0; i < 7; i++) {
+              const currentDate = new Date(currentWeekStart);
+              currentDate.setDate(currentWeekStart.getDate() + i);
+              const dateKey = currentDate.toDateString();
+              const dayName = currentDate
+                .toLocaleDateString("en-US", { weekday: "long" })
+                .toLowerCase();
+
+              if (!template.days[dayName] || !template.days[dayName].enabled)
+                continue;
+
+              template.days[dayName].shifts.forEach((shift) => {
+                const startTime = new Date(currentDate);
+                const [sh, sm] = shift.startTime.split(":");
+                startTime.setHours(parseInt(sh), parseInt(sm));
+
+                const endTime = new Date(currentDate);
+                const [eh, em] = shift.endTime.split(":");
+                endTime.setHours(parseInt(eh), parseInt(em));
+
+                const duration = (endTime - startTime) / (1000 * 60 * 60);
+
+                // Filter available employees
+                let available = employees.filter((emp) => {
+                  if (
+                    (shift.type === "Open" || shift.type === "Close") &&
+                    !emp.isKeyholder
+                  )
+                    return false;
+                  const shiftsToday = dailyAssignments[dateKey]?.get(emp.name) || 0;
+                  if (shiftsToday >= MAX_SHIFTS_PER_DAY) return false;
+                  const lastEnd = lastShiftEndMap[emp.name];
+                  if (lastEnd && startTime - lastEnd < MIN_REST_MS) return false;
+                  return true;
+                });
+
+                if (available.length === 0) {
+                  console.warn(`No available employee for ${shift.type} on ${dateKey}`);
+                  missingShifts.push(`${shift.type} on ${dateKey}`);
+                  return;
+                }
+
+                available.sort((a, b) => {
+                  const hoursA = hoursMap[a.name] || 0;
+                  const hoursB = hoursMap[b.name] || 0;
+                  return hoursA !== hoursB ? hoursA - hoursB : Math.random() - 0.5;
+                });
+
+                const chosen = available[0];
+                hoursMap[chosen.name] += duration;
+                lastShiftEndMap[chosen.name] = endTime;
+                if (!dailyAssignments[dateKey]) {
+                  dailyAssignments[dateKey] = new Map();
+                }
+                const current = dailyAssignments[dateKey].get(chosen.name) || 0;
+                dailyAssignments[dateKey].set(chosen.name, current + 1);
+
+                const event = {
+                  title: `${chosen.name} (${shift.type} - ${duration.toFixed(
+                    1
+                  )}h)`,
+                  start: startTime,
+                  end: endTime,
+                  allDay: false,
+                  backgroundColor: getShiftColor(shift.type),
+                  borderColor: getShiftColor(shift.type),
+                  textColor: "#fff",
+                  display: "block",
+                  extendedProps: {
+                    employee: chosen.name,
+                    shiftType: shift.type,
+                  },
+                };
+                generatedEvents.push(event);
               });
+            }
+          } else {
+            // Fallback to one opener shift per weekday
+            for (let i = 0; i < 5; i++) {
+              const currentDate = new Date(currentWeekStart);
+              currentDate.setDate(currentWeekStart.getDate() + i);
+              const dateKey = currentDate.toDateString();
+              const start = new Date(currentDate);
+              start.setHours(9, 45, 0, 0);
+              const end = new Date(start);
+              end.setHours(end.getHours() + 5);
 
-              if (available.length === 0) return;
-
-              // Sort by least hours assigned
-              available.sort(
-                (a, b) => (hoursMap[a.name] || 0) - (hoursMap[b.name] || 0)
+              let available = employees.filter(
+                (emp) =>
+                  emp.isKeyholder &&
+                  (dailyAssignments[dateKey]?.get(emp.name) || 0) <
+                    MAX_SHIFTS_PER_DAY &&
+                  (!lastShiftEndMap[emp.name] ||
+                    start - lastShiftEndMap[emp.name] >= MIN_REST_MS)
               );
 
-              const chosen = available[0];
-              hoursMap[chosen.name] += duration;
-              if (!dailyAssignments[dateKey])
-                dailyAssignments[dateKey] = new Set();
-              dailyAssignments[dateKey].add(chosen.name);
+              if (available.length === 0) {
+                console.warn(`No available employee for Open on ${dateKey}`);
+                missingShifts.push(`Open on ${dateKey}`);
+                continue;
+              }
 
-              calendar.addEvent({
-                title: `${chosen.name} (${shift.type} - ${duration.toFixed(
-                  1
-                )}h)`,
-                start: startTime,
-                end: endTime,
+              available.sort((a, b) => {
+                const hoursA = hoursMap[a.name] || 0;
+                const hoursB = hoursMap[b.name] || 0;
+                return hoursA !== hoursB ? hoursA - hoursB : Math.random() - 0.5;
+              });
+              const chosen = available[0];
+
+              const duration = 5;
+              hoursMap[chosen.name] += duration;
+              lastShiftEndMap[chosen.name] = end;
+              if (!dailyAssignments[dateKey]) {
+                dailyAssignments[dateKey] = new Map();
+              }
+              const current = dailyAssignments[dateKey].get(chosen.name) || 0;
+              dailyAssignments[dateKey].set(chosen.name, current + 1);
+
+              const event = {                
+                title: `${chosen.name} (Open - 5.0h)`,
+                start,
+                end,
                 allDay: false,
-                backgroundColor: getShiftColor(shift.type),
-                borderColor: getShiftColor(shift.type),
+                backgroundColor: getShiftColor("Open"),
+                borderColor: getShiftColor("Open"),
                 textColor: "#fff",
                 display: "block",
-              });
-            });
+                extendedProps: {
+                  employee: chosen.name,
+                  shiftType: "Open",
+                },
+              };
+              generatedEvents.push(event);
+            }
           }
-        } else {
-          // Fallback to one opener shift per weekday
-          for (let i = 0; i < 5; i++) {
-            const currentDate = new Date(currentWeekStart);
-            currentDate.setDate(currentWeekStart.getDate() + i);
-            const dateKey = currentDate.toDateString();
 
-            let available = employees.filter(
-              (emp) =>
-                emp.isKeyholder && !dailyAssignments[dateKey]?.has(emp.name)
-            );
+          // Calculate fairness score
+          let avg =
+            Object.values(hoursMap).reduce((a, b) => a + b, 0) / employees.length;
+          let fairnessScore = Object.values(hoursMap)
+            .map((h) => Math.pow(h - avg, 2))
+            .reduce((a, b) => a + b, 0);
+          let coveragePenalty = missingShifts.length * 1000;
+          let score = coveragePenalty + fairnessScore * 2;
 
-            if (available.length === 0) continue;
-
-            available.sort(
-              (a, b) => (hoursMap[a.name] || 0) - (hoursMap[b.name] || 0)
-            );
-            const chosen = available[0];
-
-            const start = new Date(currentDate);
-            start.setHours(9, 45, 0, 0);
-            const end = new Date(start);
-            end.setHours(end.getHours() + 5);
-
-            const duration = 5;
-            hoursMap[chosen.name] += duration;
-            if (!dailyAssignments[dateKey])
-              dailyAssignments[dateKey] = new Set();
-            dailyAssignments[dateKey].add(chosen.name);
-
-            calendar.addEvent({
-              title: `${chosen.name} (Open - 5.0h)`,
-              start,
-              end,
-              allDay: false,
-              backgroundColor: getShiftColor("Open"),
-              borderColor: getShiftColor("Open"),
-              textColor: "#fff",
-              display: "block",
-            });
+          // Keep best schedule
+          if (score < bestScore) {
+            bestScore = score;
+            bestSchedule = generatedEvents.map(e => ({
+              title: e.title,
+              start: new Date(e.start),
+              end: new Date(e.end),
+              backgroundColor: e.backgroundColor,
+              borderColor: e.borderColor,
+              textColor: e.textColor,
+              extendedProps: {
+                employee: e.extendedProps?.employee || "",
+                shiftType: e.extendedProps?.shiftType || "Open",
+              },
+            }));
+            bestMissingShifts = [...missingShifts];
           }
         }
+        // Apply best schedule
+        if (!bestSchedule) {
+          showErrorMessage("Failed to generate schedule");
+          window.isGenerating = false;
+          return;
+        }
+        const weekEnd = new Date(targetWeekStart);
+        weekEnd.setDate(targetWeekStart.getDate() + 7);
+        calendar.getEvents().forEach((event) => {
+          const date = new Date(event.start);
+          if (date >= targetWeekStart && date < weekEnd) {
+            event.remove();
+          }
+        });
+        bestSchedule.forEach(event => calendar.addEvent(event));
 
+        // NOW save + update UI
         saveEventsToLocalStorage();
-        showSuccessMessage("Schedule generated successfully");
         showWeeklyHours();
         hasUnsavedChanges = true;
+        showSuccessMessage("Schedule generated successfully!");
+        if (bestMissingShifts.length > 0) {
+          showErrorMessage(
+            `Generated with ${bestMissingShifts.length} unfilled shift(s).`
+          );
+        }
+        
+        window.isGenerating = false;
       }
 
       // Utility functions
@@ -2120,11 +2271,13 @@
           const shiftsByEmployee = {};
 
           events.forEach((event) => {
-            const nameMatch = event.title.match(/^(.+?) \(/);
-            if (!nameMatch) return;
-            const name = nameMatch[1];
-
-            const shiftDetails = event.title.match(/\((.*?)\)/)?.[1] || "";
+            const name = getEmployeeFromEvent(event);
+            if (!name) return;
+            const shiftType = getShiftTypeFromEvent(event);
+            const duration = ((event.end - event.start) / (1000 * 60 * 60)).toFixed(
+              1
+            );
+            const shiftDetails = `${shiftType} - ${duration}h`;
 
             if (!shiftsByEmployee[name]) {
               shiftsByEmployee[name] = [];
@@ -2224,7 +2377,7 @@
                 minute: "2-digit",
               });
 
-              const staff = event.title.split(" (")[0];
+              const staff = getEmployeeFromEvent(event);
 
               return `
               <tr>
