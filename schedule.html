@@ -647,7 +647,8 @@
           ><i class="fas fa-sign-out-alt"></i> Logout</a
         >
         <a href="schedule.html" style="color: var(--primary)"
-          ><i class="fas fa-calendar-alt"></i> Schedule</a
+          ><i class="fas fa-calendar-alt"></i> Schedule
+          <span id="notifBadge">0</span></a
         >
         <a href="team.html"><i class="fas fa-users"></i> Team</a>
         <div class="settings-toggle">
@@ -702,7 +703,28 @@
           <button class="button" onclick="assignShift()">
             <i class="fas fa-user-plus"></i> Assign Shift
           </button>
+          <button class="button view-only" onclick="offerSelectedShift()">
+            <i class="fas fa-exchange-alt"></i> Offer Selected Shift
+          </button>
         </div>
+      </div>
+      <div class="weekly-hours">
+        <div class="hours-header">
+          <div>
+            <h2>Available Shifts</h2>
+            <div>Swap pool (auto-expires within 24h of shift start)</div>
+          </div>
+        </div>
+        <ul id="swapPoolList"></ul>
+      </div>
+      <div class="weekly-hours">
+        <div class="hours-header">
+          <div>
+            <h2>Swap Requests</h2>
+            <div>Incoming direct requests for your approval</div>
+          </div>
+        </div>
+        <ul id="swapRequestsList"></ul>
       </div>
 
       <!-- Calendar Section -->
@@ -885,20 +907,517 @@
       let calendar;
       let selectedEvents = [];
       let selectedDays = new Set();
-      const employees = JSON.parse(localStorage.getItem("crewEmployees")) || [];
+      function safeParse(key, fallback = []) {
+        try {
+          return JSON.parse(localStorage.getItem(key)) || fallback;
+        } catch {
+          return fallback;
+        }
+      }
+      function generateId() {
+        return crypto.randomUUID();
+      }
+      const AppState = {
+        employees: [],
+        events: [],
+        swapPool: [],
+        swapRequests: [],
+        user: null,
+      };
+      function initializeState() {
+        const stored = safeParse("appState", null);
+        if (stored && typeof stored === "object") {
+          AppState.employees = Array.isArray(stored.employees)
+            ? stored.employees
+            : safeParse("crewEmployees");
+          AppState.events = Array.isArray(stored.events)
+            ? stored.events
+            : safeParse("scheduledShifts");
+          AppState.swapPool = Array.isArray(stored.swapPool)
+            ? stored.swapPool
+            : safeParse("swapPool");
+          AppState.swapRequests = Array.isArray(stored.swapRequests)
+            ? stored.swapRequests
+            : safeParse("swapRequests");
+          AppState.user = stored.user || safeParse("loggedInUser", null);
+          return;
+        }
+        AppState.employees = safeParse("crewEmployees");
+        AppState.events = safeParse("scheduledShifts");
+        AppState.swapPool = safeParse("swapPool");
+        AppState.swapRequests = safeParse("swapRequests");
+        AppState.user = safeParse("loggedInUser", null);
+      }
+      function syncState() {
+        localStorage.setItem("appState", JSON.stringify(AppState));
+        // Backward-compat keys for existing pages/features.
+        localStorage.setItem("crewEmployees", JSON.stringify(AppState.employees));
+        localStorage.setItem("scheduledShifts", JSON.stringify(AppState.events));
+        localStorage.setItem("swapPool", JSON.stringify(AppState.swapPool));
+        localStorage.setItem("swapRequests", JSON.stringify(AppState.swapRequests));
+        localStorage.setItem("loggedInUser", JSON.stringify(AppState.user));
+      }
+      function perform(action) {
+        try {
+          action();
+          syncState();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      initializeState();
+      const CONFIG = {
+        MIN_REST_HOURS: 10,
+        MAX_SHIFTS_PER_DAY: 1,
+        SHIFT_DURATION: 5,
+        ATTEMPTS: 120,
+      };
+      const employees = AppState.employees;
       let hasUnsavedChanges = false;
       let currentViewHoursData = [];
       let visibleHoursCount = 0;
-      let user = JSON.parse(localStorage.getItem("loggedInUser"));
+      let user = AppState.user;
 
       function getEmployeeFromEvent(event) {
+        if (event.employee) return event.employee;
         if (event.extendedProps?.employee) return event.extendedProps.employee;
         return "";
       }
 
       function getShiftTypeFromEvent(event) {
+        if (event.shiftType) return event.shiftType;
         if (event.extendedProps?.shiftType) return event.extendedProps.shiftType;
         return "Open";
+      }
+
+      function getEmployeeByName(name) {
+        return employees.find((emp) => emp.name === name);
+      }
+
+      function getDayAvailability(emp, dayName) {
+        const availability = emp?.availability;
+        if (!availability || typeof availability !== "object") return null;
+        return Array.isArray(availability[dayName]) ? availability[dayName] : [];
+      }
+
+      function isEmployeeAvailableForShift(emp, currentDate, startTime, endTime) {
+        const dayName = currentDate
+          .toLocaleDateString("en-US", { weekday: "long" })
+          .toLowerCase();
+        const dayAvailability = getDayAvailability(emp, dayName);
+        if (dayAvailability === null) return true;
+        if (dayAvailability.length === 0) return false;
+
+        return dayAvailability.some((slot) => {
+          const start = new Date(currentDate);
+          const end = new Date(currentDate);
+          const [sh, sm] = slot.start.split(":").map(Number);
+          const [eh, em] = slot.end.split(":").map(Number);
+          start.setHours(sh, sm, 0, 0);
+          end.setHours(eh, em, 0, 0);
+          return startTime >= start && endTime <= end;
+        });
+      }
+
+      function pruneSwapPool() {
+        const now = new Date();
+        AppState.swapPool = AppState.swapPool.filter((entry) => {
+          const shiftStart = new Date(entry.shiftStart);
+          const hoursUntilShift = (shiftStart - now) / (1000 * 60 * 60);
+          return hoursUntilShift > 24;
+        });
+        syncState();
+      }
+
+      function renderSwapPool() {
+        pruneSwapPool();
+        const list = document.getElementById("swapPoolList");
+        if (!list) return;
+        list.innerHTML = "";
+        if (AppState.swapPool.length === 0) {
+          list.innerHTML = "<li>No available shifts in pool.</li>";
+          return;
+        }
+        AppState.swapPool
+          .slice()
+          .sort((a, b) => new Date(a.shiftStart) - new Date(b.shiftStart))
+          .forEach((entry) => {
+            const li = document.createElement("li");
+            const start = new Date(entry.shiftStart);
+            const end = new Date(entry.shiftEnd);
+            const date = start.toLocaleDateString("en-US", {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+            });
+            const time = `${start.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}-${end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+            li.innerHTML = `
+              <span>${date} ${time} (${entry.shiftType || "Open"}) - ${entry.originalEmployee}</span>
+              <button class="button view-only small" onclick="takeShift('${entry.shiftId}')">Take Shift</button>
+            `;
+            list.appendChild(li);
+          });
+      }
+
+      function updateNotifications() {
+        const count = AppState.swapRequests.filter(
+          (r) => r.toEmployee === user.name && r.status === "pending"
+        ).length;
+        const badge = document.getElementById("notifBadge");
+        if (!badge) return;
+        badge.textContent = count;
+        badge.style.display = count > 0 ? "inline-block" : "none";
+      }
+
+      function clearSelections() {
+        selectedEvents = [];
+        selectedDays.clear();
+      }
+
+      function createShiftEvent({ employee, shiftType, start, end }) {
+        return {
+          id: generateId(),
+          employee,
+          shiftType,
+          start,
+          end,
+        };
+      }
+
+      function formatTitle(eventLike) {
+        const duration =
+          (new Date(eventLike.end) - new Date(eventLike.start)) / (1000 * 60 * 60);
+        return `${eventLike.employee} (${eventLike.shiftType} - ${duration.toFixed(
+          1
+        )}h)`;
+      }
+
+      function normalizeStateEvent(eventLike) {
+        return {
+          id: eventLike.id,
+          employee: eventLike.employee || eventLike.extendedProps?.employee || "",
+          shiftType: eventLike.shiftType || eventLike.extendedProps?.shiftType || "Open",
+          start: new Date(eventLike.start),
+          end: new Date(eventLike.end),
+        };
+      }
+
+      function getAllEvents() {
+        return (AppState.events || []).map(normalizeStateEvent);
+      }
+
+      function toCalendarEvent(eventLike) {
+        const e = normalizeStateEvent(eventLike);
+        return {
+          id: e.id,
+          title: formatTitle(e),
+          start: e.start,
+          end: e.end,
+          allDay: false,
+          backgroundColor: getShiftColor(e.shiftType),
+          borderColor: getShiftColor(e.shiftType),
+          textColor: "#fff",
+          display: "block",
+          extendedProps: {
+            employee: e.employee,
+            shiftType: e.shiftType,
+          },
+        };
+      }
+
+      function renderCalendarFromState() {
+        if (!calendar) return;
+        calendar.removeAllEvents();
+        getAllEvents().forEach((event) => {
+          calendar.addEvent(toCalendarEvent(event));
+        });
+      }
+
+      function offerSelectedShift() {
+        if (selectedEvents.length !== 1) {
+          showErrorMessage("Select one shift to offer.");
+          return;
+        }
+        const event = selectedEvents[0];
+        const eventEmployee = getEmployeeFromEvent(event);
+        const canOverride = user.role === "owner" || user.role === "manager";
+        if (!canOverride && eventEmployee !== user.name) {
+          showErrorMessage("You can only offer your own shift.");
+          return;
+        }
+        const shiftId = event.id;
+        if (!shiftId) {
+          showErrorMessage("Shift missing ID");
+          return;
+        }
+        if (AppState.swapRequests.some((r) => r.shiftId === shiftId && r.status === "pending")) {
+          showErrorMessage("Shift already has pending swap requests");
+          return;
+        }
+        if (AppState.swapPool.some((entry) => entry.shiftId === shiftId)) {
+          showErrorMessage("Shift is already in swap pool.");
+          return;
+        }
+        AppState.swapPool.push({
+          shiftId,
+          originalEmployee: eventEmployee,
+          shiftStart: event.start,
+          shiftEnd: event.end,
+          shiftType: getShiftTypeFromEvent(event),
+          postedAt: new Date(),
+        });
+        syncState();
+        renderSwapPool();
+        clearSelections();
+        showSuccessMessage("Shift added to swap pool.");
+      }
+
+      function canAssign(employeeName, start, end, excludeId = null) {
+        const MIN_REST_MS = CONFIG.MIN_REST_HOURS * 60 * 60 * 1000;
+        const sameDay = getAllEvents().filter(
+          (e) =>
+            e.employee === employeeName &&
+            e.start.toDateString() === start.toDateString() &&
+            e.id !== excludeId
+        );
+        if (sameDay.length >= CONFIG.MAX_SHIFTS_PER_DAY) return false;
+        const restOk = getAllEvents().every(
+          (e) =>
+            e.employee !== employeeName ||
+            e.id === excludeId ||
+            start - new Date(e.end) >= MIN_REST_MS
+        );
+        if (!restOk) return false;
+        const emp = getEmployeeByName(employeeName);
+        if (!emp) return false;
+        return isEmployeeAvailableForShift(emp, start, start, end);
+      }
+
+      function takeShift(shiftId) {
+        const entry = AppState.swapPool.find((s) => s.shiftId === shiftId);
+        if (!entry) return;
+        if (entry.originalEmployee === user.name) {
+          showErrorMessage("You cannot claim your own posted shift.");
+          return;
+        }
+        const event = getAllEvents().find((e) => e.id === shiftId);
+        if (!event) {
+          AppState.swapPool = AppState.swapPool.filter((s) => s.shiftId !== shiftId);
+          syncState();
+          renderSwapPool();
+          return;
+        }
+        if (!canAssign(user.name, new Date(event.start), new Date(event.end), shiftId)) {
+          showErrorMessage("Cannot claim: availability/rest/daily limit not met.");
+          return;
+        }
+        const hoursUntilShift =
+          (new Date(event.start) - new Date()) / (1000 * 60 * 60);
+        if (hoursUntilShift < 24 && entry.originalEmployee !== user.name) {
+          showErrorMessage("Too late to claim this shift");
+          return;
+        }
+        AppState.events = getAllEvents().map((e) =>
+          e.id === shiftId ? { ...e, employee: user.name } : e
+        );
+        AppState.swapPool = AppState.swapPool.filter((s) => s.shiftId !== shiftId);
+        syncState();
+        renderCalendarFromState();
+        saveEventsToLocalStorage();
+        renderSwapPool();
+        clearSelections();
+        showSuccessMessage("Shift claimed!");
+      }
+
+      function openShiftActionModal() {
+        if (selectedEvents.length !== 1) return;
+        removeShiftActionModal();
+        const modal = document.createElement("div");
+        modal.id = "shiftActionModal";
+        modal.className = "modal-backdrop active";
+        modal.innerHTML = `
+          <div class="modal-content">
+            <button class="close-popup" onclick="removeShiftActionModal()">
+              <i class="fas fa-times"></i>
+            </button>
+            <h2>Reassign / Manage Shift</h2>
+            <div class="button-group">
+              <button class="button" onclick="offerSelectedShift(); removeShiftActionModal();">
+                Offer to Pool
+              </button>
+              <button class="button" onclick="openDirectSwapModal()">
+                Swap with Someone
+              </button>
+              <button class="button" style="background:#6b7280" onclick="removeShiftActionModal()">
+                Cancel
+              </button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+      }
+
+      function removeShiftActionModal() {
+        const modal = document.getElementById("shiftActionModal");
+        if (modal) modal.remove();
+      }
+
+      function openDirectSwapModal() {
+        if (selectedEvents.length !== 1) return;
+        const event = selectedEvents[0];
+        const eventEmployee = getEmployeeFromEvent(event);
+        const availableEmployees = employees.filter((emp) => emp.name !== eventEmployee);
+        removeShiftActionModal();
+        const modal = document.createElement("div");
+        modal.id = "directSwapModal";
+        modal.className = "modal-backdrop active";
+        modal.innerHTML = `
+          <div class="modal-content">
+            <button class="close-popup" onclick="removeDirectSwapModal()">
+              <i class="fas fa-times"></i>
+            </button>
+            <h2>Swap with Someone</h2>
+            <div style="margin-bottom: 1rem;">
+              <label for="directSwapTarget">Choose employee</label>
+              <select id="directSwapTarget" class="select">
+                <option value="">Select Employee</option>
+                ${availableEmployees
+                  .map((emp) => `<option value="${emp.name}">${emp.name}</option>`)
+                  .join("")}
+              </select>
+            </div>
+            <div class="button-group">
+              <button class="button" onclick="submitDirectSwapRequest()">Send Request</button>
+              <button class="button" style="background:#6b7280" onclick="removeDirectSwapModal()">Cancel</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+      }
+
+      function removeDirectSwapModal() {
+        const modal = document.getElementById("directSwapModal");
+        if (modal) modal.remove();
+      }
+
+      function requestDirectSwap(event, targetEmployee) {
+        if (!event || !targetEmployee) return;
+        const shiftId = event.id;
+        if (!shiftId) return showErrorMessage("Shift missing ID");
+        if (AppState.swapPool.some((s) => s.shiftId === shiftId)) {
+          showErrorMessage("Shift is already in swap pool");
+          return;
+        }
+        if (
+          AppState.swapRequests.some(
+            (r) =>
+              r.shiftId === shiftId &&
+              r.toEmployee === targetEmployee &&
+              r.status === "pending"
+          )
+        ) {
+          return showErrorMessage("Already requested");
+        }
+        AppState.swapRequests.push({
+          id: generateId(),
+          shiftId,
+          fromEmployee: user.name,
+          toEmployee: targetEmployee,
+          status: "pending",
+          createdAt: new Date(),
+        });
+        syncState();
+        renderSwapRequests();
+        updateNotifications();
+        clearSelections();
+        if (targetEmployee === user.name) return;
+        showSuccessMessage("Swap request sent");
+      }
+
+      function submitDirectSwapRequest() {
+        if (selectedEvents.length !== 1) return;
+        const target = document.getElementById("directSwapTarget")?.value;
+        if (!target) {
+          showErrorMessage("Please select an employee.");
+          return;
+        }
+        requestDirectSwap(selectedEvents[0], target);
+        removeDirectSwapModal();
+      }
+
+      function acceptSwap(requestId) {
+        const req = AppState.swapRequests.find((r) => r.id === requestId);
+        if (!req || req.status !== "pending") return;
+        const event = getAllEvents().find((e) => e.id === req.shiftId);
+        if (!event) return;
+        if (!canAssign(req.toEmployee, new Date(event.start), new Date(event.end), req.shiftId)) {
+          showErrorMessage("Cannot take this shift (conflict)");
+          return;
+        }
+        AppState.events = getAllEvents().map((e) =>
+          e.id === req.shiftId ? { ...e, employee: req.toEmployee } : e
+        );
+        req.status = "accepted";
+        syncState();
+        renderCalendarFromState();
+        saveEventsToLocalStorage();
+        renderSwapRequests();
+        updateNotifications();
+        clearSelections();
+        showSuccessMessage("Shift swapped successfully");
+      }
+
+      function rejectSwap(requestId) {
+        const req = AppState.swapRequests.find((r) => r.id === requestId);
+        if (!req) return;
+        req.status = "rejected";
+        syncState();
+        renderSwapRequests();
+        updateNotifications();
+        clearSelections();
+        showSuccessMessage("Swap rejected");
+      }
+
+      function renderSwapRequests() {
+        const list = document.getElementById("swapRequestsList");
+        if (!list) return;
+        const myRequests = AppState.swapRequests.filter(
+          (r) => r.toEmployee === user.name && r.status === "pending"
+        );
+        list.innerHTML = "";
+        if (myRequests.length === 0) {
+          list.innerHTML = "<li>No incoming swap requests.</li>";
+          return;
+        }
+        myRequests.forEach((req) => {
+          const event = getAllEvents().find((e) => e.id === req.shiftId);
+          const shiftInfo = event
+            ? `${event.start.toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+              })} ${event.start.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}-${event.end.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}`
+            : "Shift no longer exists";
+          const li = document.createElement("li");
+          li.innerHTML = `
+            <span>${req.fromEmployee} -> ${req.toEmployee} | ${shiftInfo}</span>
+            <div>
+              <button class="button view-only small" onclick="acceptSwap(${req.id})">Accept</button>
+              <button class="button view-only small" onclick="rejectSwap(${req.id})" style="background:#6b7280;">Reject</button>
+            </div>
+          `;
+          list.appendChild(li);
+        });
+        updateNotifications();
       }
 
       // Modal functions
@@ -919,7 +1438,7 @@
       // Initialize application
       document.addEventListener("DOMContentLoaded", function () {
         // User authentication check
-        user = JSON.parse(localStorage.getItem("loggedInUser"));
+        user = AppState.user;
         if (!user) {
           window.location.href = "login.html";
         }
@@ -939,7 +1458,7 @@
           dayMaxEvents: true,
           slotDuration: "00:15:00",
           slotLabelInterval: "00:15:00",
-          events: JSON.parse(localStorage.getItem("scheduledShifts")) || [],
+          events: getAllEvents().map(toCalendarEvent),
           slotMinTime: "08:00:00",
           slotMaxTime: "24:00:00",
           displayEventTime: true,
@@ -977,28 +1496,24 @@
             info.el.style.backgroundColor = info.event.backgroundColor;
             info.el.style.borderColor = info.event.borderColor;
             info.el.style.color = info.event.textColor;
+            info.el.title = info.event.title;
           },
           eventClick: function (info) {
-            if (user.role === "owner") {
-              selectedDays.clear();
-              calendar.getEvents().forEach((event) => {
-                event.setProp("borderColor", "");
-                event.setProp("borderWidth", "");
-              });
+            selectedDays.clear();
+            calendar.getEvents().forEach((event) => {
+              event.setProp("borderColor", "");
+              event.setProp("borderWidth", "");
+            });
 
-              if (info.jsEvent.shiftKey) {
-                selectedEvents.push(info.event);
-                info.event.setProp("borderColor", "#dc2626");
-                info.event.setProp("borderWidth", "2px");
-              } else {
-                selectedEvents.forEach((event) => {
-                  event.setProp("borderColor", "");
-                  event.setProp("borderWidth", "");
-                });
-                selectedEvents = [info.event];
-                info.event.setProp("borderColor", "#dc2626");
-                info.event.setProp("borderWidth", "2px");
-              }
+            if (info.jsEvent.shiftKey && user.role === "owner") {
+              selectedEvents.push(info.event);
+              info.event.setProp("borderColor", "#dc2626");
+              info.event.setProp("borderWidth", "2px");
+            } else {
+              selectedEvents = [info.event];
+              info.event.setProp("borderColor", "#dc2626");
+              info.event.setProp("borderWidth", "2px");
+              openShiftActionModal();
             }
           },
           select: function (info) {
@@ -1055,19 +1570,33 @@
             }
           },
           eventDrop: function (info) {
-            updateEventTitle(info.event);
+            AppState.events = getAllEvents().map((e) =>
+              e.id === info.event.id
+                ? { ...e, start: new Date(info.event.start), end: new Date(info.event.end) }
+                : e
+            );
             hasUnsavedChanges = true;
             saveEventsToLocalStorage();
+            renderCalendarFromState();
             showWeeklyHours();
           },
           eventResize: function (info) {
-            updateEventTitle(info.event);
+            AppState.events = getAllEvents().map((e) =>
+              e.id === info.event.id
+                ? { ...e, start: new Date(info.event.start), end: new Date(info.event.end) }
+                : e
+            );
             hasUnsavedChanges = true;
             saveEventsToLocalStorage();
+            renderCalendarFromState();
             showWeeklyHours();
           },
         });
-        calendar.render();
+        try {
+          calendar.render();
+        } catch (e) {
+          console.error("Calendar failed:", e);
+        }
 
         // Add datesSet event listener
         calendar.on("datesSet", function (info) {
@@ -1094,7 +1623,8 @@
           ".button:not(.view-only)"
         );
         editControls.forEach((control) => {
-          control.style.display = user.role === "owner" ? "" : "none";
+          control.style.display =
+            user.role === "owner" || user.role === "manager" ? "" : "none";
         });
 
         // Initialize employee dropdown
@@ -1102,6 +1632,9 @@
 
         // Show initial hours
         showWeeklyHours();
+        renderSwapPool();
+        renderSwapRequests();
+        updateNotifications();
 
         // Save changes when leaving page
         window.addEventListener("beforeunload", function (e) {
@@ -1161,7 +1694,7 @@
           case "Delete":
             if (selectedDays.size > 0) {
               // Get all events on selected days
-              const eventsToDelete = calendar.getEvents().filter((event) => {
+              const eventsToDelete = getAllEvents().filter((event) => {
                 const eventDate = event.start.toDateString();
                 return selectedDays.has(eventDate);
               });
@@ -1169,9 +1702,12 @@
               if (eventsToDelete.length > 0) {
                 const message = `Are you sure you want to delete all ${eventsToDelete.length} shifts?`;
                 if (confirm(message)) {
-                  eventsToDelete.forEach((event) => event.remove());
+                  const idsToDelete = new Set(eventsToDelete.map((e) => e.id));
+                  AppState.events = getAllEvents().filter((e) => !idsToDelete.has(e.id));
+                  renderCalendarFromState();
                   selectedDays.clear();
                   hasUnsavedChanges = true;
+                  saveEventsToLocalStorage();
                   showWeeklyHours();
                   showSuccessMessage(`Deleted ${eventsToDelete.length} shifts`);
                 }
@@ -1186,9 +1722,12 @@
 
               if (confirm(message)) {
                 const count = selectedEvents.length;
-                selectedEvents.forEach((event) => event.remove());
+                const idsToDelete = new Set(selectedEvents.map((e) => e.id));
+                AppState.events = getAllEvents().filter((e) => !idsToDelete.has(e.id));
+                renderCalendarFromState();
                 selectedEvents = [];
                 hasUnsavedChanges = true;
+                saveEventsToLocalStorage();
                 showWeeklyHours();
                 showSuccessMessage(`Deleted ${count} shifts`);              }
             } else {
@@ -1206,12 +1745,9 @@
       });
 
       function showReassignModal() {
-        const currentTitle = selectedEvents[0].title;
-        const currentEmployee = currentTitle.split(" (")[0];
-        const currentShiftTypeMatch = currentTitle.match(/\((.*?) - /);
-        const currentShiftType = currentShiftTypeMatch
-          ? currentShiftTypeMatch[1]
-          : "Open";
+        const currentEvent = selectedEvents[0];
+        const currentEmployee = getEmployeeFromEvent(currentEvent);
+        const currentShiftType = getShiftTypeFromEvent(currentEvent);
 
         const availableEmployees = employees.filter(
           (emp) => emp.name !== currentEmployee
@@ -1284,26 +1820,16 @@
           return;
         }
 
-        const currentTitle = selectedEvents[0].title;
-        const oldName = currentTitle.split(" (")[0];
-        const durationMatch = currentTitle.match(/- (\d+(?:\.\d+)?)h/);
-        const duration = durationMatch ? parseFloat(durationMatch[1]) : 5;
-
-        const newTitle = `${selectedEmployee} (${selectedShiftType} - ${duration.toFixed(
-          1
-        )}h)`;
-
-        selectedEvents[0].setProp("title", newTitle);
-        selectedEvents[0].setProp(
-          "backgroundColor",
-          getShiftColor(selectedShiftType)
+        const selectedId = selectedEvents[0].id;
+        AppState.events = getAllEvents().map((e) =>
+          e.id === selectedId
+            ? { ...e, employee: selectedEmployee, shiftType: selectedShiftType }
+            : e
         );
-        selectedEvents[0].setProp(
-          "borderColor",
-          getShiftColor(selectedShiftType)
-        );
+        renderCalendarFromState();
 
         hasUnsavedChanges = true;
+        saveEventsToLocalStorage();
         showWeeklyHours();
         removeReassignModal(); 
         showSuccessMessage("Shift reassigned successfully!");
@@ -1348,17 +1874,15 @@
         }
 
         // Calculate hours for events in the current view period
-        const events = calendar
-          .getEvents()
-          .filter(
-            (event) => event.start >= periodStart && event.start < periodEnd
-          );
+        const events = getAllEvents().filter(
+          (event) => event.start >= periodStart && event.start < periodEnd
+        );
 
         const hoursPerPerson = {};
         let totalHours = 0;
 
         events.forEach((event) => {
-          const name = getEmployeeFromEvent(event);
+          const name = event.employee;
           if (!name) return;
           const duration = (event.end - event.start) / (1000 * 60 * 60);
 
@@ -1432,15 +1956,15 @@
 
       // Update event title
       function updateEventTitle(event) {
-        const duration = (event.end - event.start) / (1000 * 60 * 60);
-        const shiftType = getShiftTypeFromEvent(event);
-        const name = getEmployeeFromEvent(event);
-
-        const newTitle = `${name} (${shiftType} - ${duration.toFixed(1)}h)`;
-
-        event.setExtendedProp("employee", name);
-        event.setExtendedProp("shiftType", shiftType);
-        event.setProp("title", newTitle);
+        event.setProp(
+          "title",
+          formatTitle({
+            employee: getEmployeeFromEvent(event),
+            shiftType: getShiftTypeFromEvent(event),
+            start: event.start,
+            end: event.end,
+          })
+        );
       }
 
       // Populate employee dropdown
@@ -1478,7 +2002,7 @@
         startTime.setHours(9, 45, 0, 0);
 
         const endTime = new Date(startTime);
-        endTime.setHours(endTime.getHours() + 5); // Add 5 hours for shift duration
+        endTime.setHours(endTime.getHours() + CONFIG.SHIFT_DURATION);
 
         // If end time is on a different day, adjust it to end at 23:59
         if (endTime.getDate() !== startTime.getDate()) {
@@ -1493,26 +2017,20 @@
           alert("Selected employee not found in the system.");
           return;
         }
-
-        // Calculate actual duration in hours
-        const shiftDuration = (endTime - startTime) / (1000 * 60 * 60);
+        if (!canAssign(emp.name, startTime, endTime)) {
+          showErrorMessage("Cannot assign shift (rules conflict)");
+          return;
+        }
 
         try {
-          // Create the event
-          const event = calendar.addEvent({
-            title: `${emp.name} (Open - ${shiftDuration.toFixed(1)}h)`,
+          const newEvent = createShiftEvent({
+            employee: emp.name,
+            shiftType: "Open",
             start: startTime,
             end: endTime,
-            allDay: false,
-            backgroundColor: getShiftColor("Open"),
-            borderColor: getShiftColor("Open"),
-            textColor: "#ffffff",
-            display: "block",
-            extendedProps: {
-              employee: emp.name,
-              shiftType: "Open",
-            },
           });
+          AppState.events = [...getAllEvents(), newEvent];
+          renderCalendarFromState();
 
           // Save to localStorage
           saveEventsToLocalStorage();
@@ -1524,9 +2042,9 @@
           showWeeklyHours();
           hasUnsavedChanges = true;
           showSuccessMessage("Shift assigned successfully!");
+          selectedEvents = [];
+          selectedDays.clear();
 
-          // Force calendar to re-render
-          calendar.render();
         } catch (error) {
           console.error("Error adding event:", error);
           alert("Error creating shift. Please try again.");
@@ -1535,21 +2053,8 @@
 
       // Save events to localStorage
       function saveEventsToLocalStorage() {
-        const events = calendar.getEvents().map((event) => ({
-          title: event.title,
-          start: event.start,
-          end: event.end,
-          allDay: event.allDay,
-          backgroundColor: event.backgroundColor,
-          borderColor: event.borderColor,
-          textColor: event.textColor,
-          display: "block",
-          extendedProps: {
-            employee: getEmployeeFromEvent(event),
-            shiftType: getShiftTypeFromEvent(event),
-          },
-        }));
-        localStorage.setItem("scheduledShifts", JSON.stringify(events));
+        AppState.events = getAllEvents();
+        syncState();
       }
 
       // Get shift color
@@ -1570,17 +2075,15 @@
       function generateSchedule() {
         if (window.isGenerating) return;
         window.isGenerating = true;
+        document.body.style.cursor = "wait";
         let bestSchedule = null;
         let bestScore = Infinity;
-        const MAX_SHIFTS_PER_DAY = 1;
-        const MIN_REST_HOURS = 10;
-        const MIN_REST_MS = MIN_REST_HOURS * 60 * 60 * 1000;
-        const ATTEMPTS = 120;
         let bestMissingShifts = [];
 
         if (employees.length === 0) {
           showErrorMessage("No employees available");
           window.isGenerating = false;
+          document.body.style.cursor = "default";
           return;
         }
 
@@ -1589,7 +2092,7 @@
         targetWeekStart.setDate(today.getDate() - today.getDay());
         targetWeekStart.setHours(0, 0, 0, 0);
 
-        const allEvents = calendar.getEvents();
+        const allEvents = getAllEvents();
         while (true) {
           const weekEnd = new Date(targetWeekStart);
           weekEnd.setDate(targetWeekStart.getDate() + 6);
@@ -1604,21 +2107,18 @@
           targetWeekStart.setDate(targetWeekStart.getDate() + 7);
         }
 
-        for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+        for (let attempt = 0; attempt < CONFIG.ATTEMPTS; attempt++) {
           let generatedEvents = [];
           let missingShifts = [];
-          const lastShiftEndMap = {};
-          const templates =
-            JSON.parse(localStorage.getItem("scheduleTemplates")) || {};
+          const templates = safeParse("scheduleTemplates", {});
           const selectedTemplate =
             localStorage.getItem("selectedTemplate") || null;
 
           const currentWeekStart = new Date(targetWeekStart);
-          const existingEvents = calendar.getEvents();
+          const existingEvents = getAllEvents();
 
           // Initialize employee hour tracker
           const hoursMap = {};
-          const dailyAssignments = {};
           employees.forEach((emp) => (hoursMap[emp.name] = 0));
 
           // ===== HISTORY (controlled + safe) =====
@@ -1640,9 +2140,6 @@
 
             // apply weighted history
             hoursMap[name] = (hoursMap[name] || 0) + hours * HISTORY_WEIGHT;
-            if (!lastShiftEndMap[name] || end > lastShiftEndMap[name]) {
-              lastShiftEndMap[name] = end;
-            }
           });
 
           if (selectedTemplate && templates[selectedTemplate]) {
@@ -1677,11 +2174,7 @@
                     !emp.isKeyholder
                   )
                     return false;
-                  const shiftsToday = dailyAssignments[dateKey]?.get(emp.name) || 0;
-                  if (shiftsToday >= MAX_SHIFTS_PER_DAY) return false;
-                  const lastEnd = lastShiftEndMap[emp.name];
-                  if (lastEnd && startTime - lastEnd < MIN_REST_MS) return false;
-                  return true;
+                  return canAssign(emp.name, startTime, endTime);
                 });
 
                 if (available.length === 0) {
@@ -1698,29 +2191,13 @@
 
                 const chosen = available[0];
                 hoursMap[chosen.name] += duration;
-                lastShiftEndMap[chosen.name] = endTime;
-                if (!dailyAssignments[dateKey]) {
-                  dailyAssignments[dateKey] = new Map();
-                }
-                const current = dailyAssignments[dateKey].get(chosen.name) || 0;
-                dailyAssignments[dateKey].set(chosen.name, current + 1);
 
-                const event = {
-                  title: `${chosen.name} (${shift.type} - ${duration.toFixed(
-                    1
-                  )}h)`,
+                const event = createShiftEvent({
+                  employee: chosen.name,
+                  shiftType: shift.type,
                   start: startTime,
                   end: endTime,
-                  allDay: false,
-                  backgroundColor: getShiftColor(shift.type),
-                  borderColor: getShiftColor(shift.type),
-                  textColor: "#fff",
-                  display: "block",
-                  extendedProps: {
-                    employee: chosen.name,
-                    shiftType: shift.type,
-                  },
-                };
+                });
                 generatedEvents.push(event);
               });
             }
@@ -1736,12 +2213,7 @@
               end.setHours(end.getHours() + 5);
 
               let available = employees.filter(
-                (emp) =>
-                  emp.isKeyholder &&
-                  (dailyAssignments[dateKey]?.get(emp.name) || 0) <
-                    MAX_SHIFTS_PER_DAY &&
-                  (!lastShiftEndMap[emp.name] ||
-                    start - lastShiftEndMap[emp.name] >= MIN_REST_MS)
+                (emp) => emp.isKeyholder && canAssign(emp.name, start, end)
               );
 
               if (available.length === 0) {
@@ -1757,29 +2229,15 @@
               });
               const chosen = available[0];
 
-              const duration = 5;
+              const duration = CONFIG.SHIFT_DURATION;
               hoursMap[chosen.name] += duration;
-              lastShiftEndMap[chosen.name] = end;
-              if (!dailyAssignments[dateKey]) {
-                dailyAssignments[dateKey] = new Map();
-              }
-              const current = dailyAssignments[dateKey].get(chosen.name) || 0;
-              dailyAssignments[dateKey].set(chosen.name, current + 1);
 
-              const event = {                
-                title: `${chosen.name} (Open - 5.0h)`,
+              const event = createShiftEvent({
+                employee: chosen.name,
+                shiftType: "Open",
                 start,
                 end,
-                allDay: false,
-                backgroundColor: getShiftColor("Open"),
-                borderColor: getShiftColor("Open"),
-                textColor: "#fff",
-                display: "block",
-                extendedProps: {
-                  employee: chosen.name,
-                  shiftType: "Open",
-                },
-              };
+              });
               generatedEvents.push(event);
             }
           }
@@ -1796,17 +2254,12 @@
           // Keep best schedule
           if (score < bestScore) {
             bestScore = score;
-            bestSchedule = generatedEvents.map(e => ({
-              title: e.title,
+            bestSchedule = generatedEvents.map((e) => ({
+              id: e.id,
+              employee: e.employee,
+              shiftType: e.shiftType,
               start: new Date(e.start),
               end: new Date(e.end),
-              backgroundColor: e.backgroundColor,
-              borderColor: e.borderColor,
-              textColor: e.textColor,
-              extendedProps: {
-                employee: e.extendedProps?.employee || "",
-                shiftType: e.extendedProps?.shiftType || "Open",
-              },
             }));
             bestMissingShifts = [...missingShifts];
           }
@@ -1815,17 +2268,19 @@
         if (!bestSchedule) {
           showErrorMessage("Failed to generate schedule");
           window.isGenerating = false;
+          document.body.style.cursor = "default";
           return;
         }
         const weekEnd = new Date(targetWeekStart);
         weekEnd.setDate(targetWeekStart.getDate() + 7);
-        calendar.getEvents().forEach((event) => {
+        const preserved = getAllEvents().filter((event) => {
           const date = new Date(event.start);
-          if (date >= targetWeekStart && date < weekEnd) {
-            event.remove();
-          }
+          return !(date >= targetWeekStart && date < weekEnd);
         });
-        bestSchedule.forEach(event => calendar.addEvent(event));
+        AppState.events = [...preserved, ...bestSchedule.map(normalizeStateEvent)];
+        renderCalendarFromState();
+        pruneSwapPool();
+        renderSwapPool();
 
         // NOW save + update UI
         saveEventsToLocalStorage();
@@ -1839,6 +2294,7 @@
         }
         
         window.isGenerating = false;
+        document.body.style.cursor = "default";
       }
 
       // Utility functions
@@ -1892,8 +2348,7 @@
 
       // Template Manager Functions
       function initializeTemplateManager() {
-        const templates =
-          JSON.parse(localStorage.getItem("scheduleTemplates")) || {};
+        const templates = safeParse("scheduleTemplates", {});
         const templateSelect = document.getElementById("templateSelect");
 
         templateSelect.innerHTML =
@@ -1961,8 +2416,7 @@
           return;
         }
 
-        const templates =
-          JSON.parse(localStorage.getItem("scheduleTemplates")) || {};
+        const templates = safeParse("scheduleTemplates", {});
         const template = templates[templateName];
 
         if (!template) {
@@ -2068,8 +2522,7 @@
           return;
         }
 
-        const templates =
-          JSON.parse(localStorage.getItem("scheduleTemplates")) || {};
+        const templates = safeParse("scheduleTemplates", {});
 
         if (templates[templateName]) {
           showErrorMessage("Template name already exists");
@@ -2130,8 +2583,7 @@
           return;
         }
 
-        const templates =
-          JSON.parse(localStorage.getItem("scheduleTemplates")) || {};
+        const templates = safeParse("scheduleTemplates", {});
         const template = templates[templateName];
 
         if (!template) {
@@ -2214,8 +2666,7 @@
           return;
         }
 
-        const templates =
-          JSON.parse(localStorage.getItem("scheduleTemplates")) || {};
+        const templates = safeParse("scheduleTemplates", {});
         delete templates[templateName];
         localStorage.setItem("scheduleTemplates", JSON.stringify(templates));
 
@@ -2259,7 +2710,7 @@
         const periodEnd = new Date(view.currentEnd);
 
         // Get events only within the current view range
-        const events = calendar.getEvents().filter((event) => {
+        const events = getAllEvents().filter((event) => {
           return event.start >= periodStart && event.start < periodEnd;
         });
 
@@ -2271,9 +2722,9 @@
           const shiftsByEmployee = {};
 
           events.forEach((event) => {
-            const name = getEmployeeFromEvent(event);
+            const name = event.employee;
             if (!name) return;
-            const shiftType = getShiftTypeFromEvent(event);
+            const shiftType = event.shiftType;
             const duration = ((event.end - event.start) / (1000 * 60 * 60)).toFixed(
               1
             );
@@ -2328,7 +2779,7 @@
       }
 
       function sendImageScheduleToWhatsApp() {
-        const events = calendar.getEvents().sort((a, b) => a.start - b.start);
+        const events = getAllEvents().sort((a, b) => a.start - b.start);
         const container = document.getElementById("imagePagesContainer");
         container.innerHTML = "";
         container.style.display = "block";
@@ -2377,7 +2828,7 @@
                 minute: "2-digit",
               });
 
-              const staff = getEmployeeFromEvent(event);
+              const staff = event.employee;
 
               return `
               <tr>
