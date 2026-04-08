@@ -343,8 +343,8 @@
       }
 
       .swap-section {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
+        display: flex;
+        flex-direction: column;
         gap: 1rem;
         margin-top: 1.5rem;
       }
@@ -355,6 +355,7 @@
         border-radius: var(--radius);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         min-height: 120px;
+        width: 100%;
       }
 
       .swap-box ul {
@@ -721,10 +722,10 @@
       <!-- Top Controls -->
       <div class="top-controls">
         <div class="button-group">
-          <button class="button" onclick="showModal('templateManagerModal')">
+          <button class="button owner-only" onclick="showModal('templateManagerModal')">
             <i class="fas fa-copy"></i> Template Manager
           </button>
-          <button class="button" onclick="generateSchedule()">
+          <button class="button owner-only" onclick="generateSchedule()">
             <i class="fas fa-magic"></i> Generate Schedule
           </button>
           <button class="button whatsapp" onclick="sendScheduleToWhatsApp()">
@@ -741,7 +742,7 @@
           <select id="assignEmpSelect" class="select">
             <option value="">Select Employee</option>
           </select>
-          <button class="button" onclick="assignShift()">
+          <button class="button owner-only" onclick="assignShift()">
             <i class="fas fa-user-plus"></i> Assign Shift
           </button>
           <button class="button view-only" onclick="offerSelectedShift()">
@@ -1674,12 +1675,10 @@
           }
         });
 
-        // Show/hide edit controls based on user role
-        const editControls = document.querySelectorAll(
-          ".button:not(.view-only)"
-        );
-        editControls.forEach((control) => {
-          control.style.display =
+        // HARD PERMISSION CONTROL
+        const ownerControls = document.querySelectorAll(".owner-only");
+        ownerControls.forEach((btn) => {
+          btn.style.display =
             user.role === "owner" || user.role === "manager" ? "" : "none";
         });
 
@@ -1697,10 +1696,11 @@
         const swapRequestsBox = document.getElementById("swapRequestsBox");
 
         if (user.role === "employee") {
+          if (swapPoolBox) swapPoolBox.style.display = "block";
           if (swapRequestsBox) swapRequestsBox.style.display = "none";
-        }
-        if (user.role === "owner" || user.role === "manager") {
-          if (swapPoolBox) swapPoolBox.style.display = "none";
+        } else {
+          if (swapPoolBox) swapPoolBox.style.display = "block";
+          if (swapRequestsBox) swapRequestsBox.style.display = "block";
         }
 
         // Save changes when leaving page
