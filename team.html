@@ -355,6 +355,12 @@
       .popup .cancel:hover {
         background: #4b5563;
       }
+      .employee-name {
+        cursor: pointer;
+      }
+      .employee-name:hover {
+        text-decoration: underline;
+      }
 
       .dropdown {
         position: relative;
@@ -715,6 +721,7 @@
               <option value="Key Holder">Key Holder</option>
               <option value="Non-Key Holder">Non-Key Holder</option>
             </select>
+            <div id="availabilityEditor"></div>
             <div class="popup-buttons">
               <button
                 type="button"
@@ -743,6 +750,17 @@
             Date.now().toString(36) +
             Math.random().toString(36).substr(2, 5);
         }
+        if (!emp.availability || typeof emp.availability !== "object") {
+          emp.availability = {
+            monday: [],
+            tuesday: [],
+            wednesday: [],
+            thursday: [],
+            friday: [],
+            saturday: [],
+            sunday: [],
+          };
+        }
         return emp;
       });
       localStorage.setItem("crewEmployees", JSON.stringify(employeeList));
@@ -750,6 +768,16 @@
       let isRemoveMode = false;
       let selectedRow = null;
       let visibleRowsCount = 0;
+      let currentUser = null;
+      const AVAILABILITY_DAYS = [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+      ];
 
       // DOM elements
       const employeeTbody = document.getElementById("employeeTbody");
@@ -763,14 +791,14 @@
 
       // Load user and initialize
       document.addEventListener("DOMContentLoaded", function () {
-        const user = JSON.parse(localStorage.getItem("loggedInUser"));
+        currentUser = JSON.parse(localStorage.getItem("loggedInUser"));
 
-        if (!user) {
+        if (!currentUser) {
           window.location.href = "login.html";
         }
 
-        // Show edit controls only for owner
-        if (user.role === "owner") {
+        // Show edit controls for owner + manager
+        if (currentUser.role === "owner" || currentUser.role === "manager") {
           document.getElementById("editControls").style.display = "block";
         } else {
           document.getElementById("editControls").style.display = "none";
@@ -810,7 +838,7 @@
           const row = document.createElement("tr");
           row.dataset.id = employee.id;
           row.innerHTML = `
-            <td>${employee.name}</td>
+            <td><span class="employee-name" onclick="event.stopPropagation(); openEmployeeProfile('${employee.name.replace(/'/g, "\\'")}')">${employee.name}</span></td>
             <td>${employee.email}</td>
             <td>${employee.phone}</td>
             <td>${employee.role}</td>
@@ -893,6 +921,7 @@
             role,
             isKeyholder: role === "Key Holder",
             password: phone, // Default password
+            availability: getDefaultAvailability(),
           });
 
           saveEmployees();
@@ -902,10 +931,268 @@
 
       // Edit Employee functions
       function enableEditMode() {
+        if (currentUser.role !== "owner" && currentUser.role !== "manager") {
+          showErrorMessage("You do not have permission to edit profiles.");
+          return;
+        }
         isRemoveMode = false;
         isEditMode = true;
         highlightInteractiveRows();
         showSuccessMessage("Edit mode enabled. Click an employee to edit.");
+      }
+
+      function getDefaultAvailability() {
+        const availability = {};
+        AVAILABILITY_DAYS.forEach((day) => {
+          availability[day] = [];
+        });
+        return availability;
+      }
+
+      function normalizeAvailability(availability) {
+        const normalized = getDefaultAvailability();
+        if (!availability || typeof availability !== "object") return normalized;
+        AVAILABILITY_DAYS.forEach((day) => {
+          const daySlots = Array.isArray(availability[day]) ? availability[day] : [];
+          normalized[day] = daySlots
+            .filter((slot) => slot && slot.start && slot.end)
+            .map((slot) => ({ start: slot.start, end: slot.end }));
+        });
+        return normalized;
+      }
+
+      function renderAvailabilityEditor(employee) {
+        const editor = document.getElementById("availabilityEditor");
+        const availability = normalizeAvailability(employee.availability);
+        const isSelf = currentUser.name === employee.name;
+        const canEdit =
+          isSelf || currentUser.role === "owner" || currentUser.role === "manager";
+
+        editor.innerHTML = `
+          <h4 style="margin: 0.4rem 0 0.2rem;">Availability</h4>
+          ${AVAILABILITY_DAYS.map((day) => {
+            const label = day.charAt(0).toUpperCase() + day.slice(1);
+            const slots = availability[day] || [];
+            const slotsHtml =
+              slots.length > 0
+                ? slots
+                    .map(
+                      (slot, index) => `
+                        <div style="display:flex; gap:0.4rem; align-items:center; margin-bottom:0.3rem;">
+                          <input type="time" data-day="${day}" data-index="${index}" data-field="start" value="${slot.start}" ${canEdit ? "" : "disabled"} />
+                          <input type="time" data-day="${day}" data-index="${index}" data-field="end" value="${slot.end}" ${canEdit ? "" : "disabled"} />
+                          ${
+                            canEdit
+                              ? `<button type="button" class="button cancel" style="padding:0.35rem 0.55rem;" onclick="removeAvailabilitySlot('${day}', ${index})">-</button>`
+                              : ""
+                          }
+                        </div>
+                      `
+                    )
+                    .join("")
+                : `<span style="font-size:0.9rem; color:var(--gray);">Not available</span>`;
+            return `
+              <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.35rem;">
+                <label style="min-width:90px;">${label}</label>
+                <div style="flex:1;">
+                  ${slotsHtml}
+                  ${
+                    canEdit
+                      ? `<button type="button" class="button" style="padding:0.35rem 0.55rem;" onclick="addAvailabilitySlot('${day}')">+</button>`
+                      : ""
+                  }
+                </div>
+              </div>
+            `;
+          }).join("")}
+          ${canEdit ? "" : "<p style='font-size:0.85rem; color:var(--gray); margin-top:0.35rem;'>View only.</p>"}
+        `;
+
+        const saveBtn = document.querySelector("#editEmployeeForm button[type='submit']");
+        if (saveBtn) saveBtn.style.display = canEdit ? "" : "none";
+      }
+
+      function readAvailabilityFromEditor() {
+        const availability = getDefaultAvailability();
+        const inputs = document.querySelectorAll(
+          "#availabilityEditor input[data-day]"
+        );
+        const slots = {};
+        inputs.forEach((input) => {
+          const day = input.dataset.day;
+          const index = parseInt(input.dataset.index, 10);
+          const field = input.dataset.field;
+          if (!slots[day]) slots[day] = [];
+          if (!slots[day][index]) slots[day][index] = { start: "", end: "" };
+          slots[day][index][field] = input.value;
+        });
+        AVAILABILITY_DAYS.forEach((day) => {
+          availability[day] = (slots[day] || []).filter(
+            (slot) => slot?.start && slot?.end && slot.end > slot.start
+          );
+        });
+        return availability;
+      }
+
+      function addAvailabilitySlot(day) {
+        if (!selectedRow) return;
+        const employee = employeeList.find((emp) => emp.id === selectedRow);
+        if (!employee) return;
+        const availability = normalizeAvailability(employee.availability);
+        if (!availability[day]) availability[day] = [];
+        availability[day].push({ start: "09:00", end: "17:00" });
+        employee.availability = availability;
+        renderAvailabilityEditor(employee);
+      }
+
+      function removeAvailabilitySlot(day, index) {
+        if (!selectedRow) return;
+        const employee = employeeList.find((emp) => emp.id === selectedRow);
+        if (!employee) return;
+        const availability = normalizeAvailability(employee.availability);
+        availability[day] = (availability[day] || []).filter((_, i) => i !== index);
+        employee.availability = availability;
+        renderAvailabilityEditor(employee);
+      }
+
+      function getScheduledEventsForEmployee(name) {
+        const events = JSON.parse(localStorage.getItem("scheduledShifts")) || [];
+        return events
+          .map((e) => ({
+            ...e,
+            start: new Date(e.start),
+            end: new Date(e.end),
+          }))
+          .filter((e) => {
+            const match = e.title?.match(/^(.+?) \(/);
+            return match && match[1] === name;
+          });
+      }
+
+      function getWeekRange(baseDate = new Date()) {
+        const start = new Date(baseDate);
+        start.setDate(baseDate.getDate() - baseDate.getDay());
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 7);
+        return { start, end };
+      }
+
+      function getWeeklyHours(name) {
+        const { start, end } = getWeekRange();
+        return getScheduledEventsForEmployee(name)
+          .filter((e) => e.start >= start && e.start < end)
+          .reduce((sum, e) => sum + (e.end - e.start) / (1000 * 60 * 60), 0)
+          .toFixed(1);
+      }
+
+      function getAverageWeeklyHours(name) {
+        const now = new Date();
+        const totals = [0, 1, 2, 3].map((offset) => {
+          const base = new Date(now);
+          base.setDate(now.getDate() - offset * 7);
+          const { start, end } = getWeekRange(base);
+          return getScheduledEventsForEmployee(name)
+            .filter((e) => e.start >= start && e.start < end)
+            .reduce((sum, e) => sum + (e.end - e.start) / (1000 * 60 * 60), 0);
+        });
+        return (totals.reduce((a, b) => a + b, 0) / totals.length).toFixed(1);
+      }
+
+      function getTotalShiftsThisWeek(name) {
+        const { start, end } = getWeekRange();
+        return getScheduledEventsForEmployee(name).filter(
+          (e) => e.start >= start && e.start < end
+        ).length;
+      }
+
+      function renderAvailabilityText(emp) {
+        const availability = normalizeAvailability(emp.availability);
+        const hasAny = AVAILABILITY_DAYS.some(
+          (day) => (availability[day] || []).length > 0
+        );
+        if (!hasAny) return "<span style='color:var(--gray)'>No availability set</span>";
+        return AVAILABILITY_DAYS.map((day) => {
+          const slots = availability[day] || [];
+          if (!slots.length) return `${day}: Unavailable`;
+          return `${day}: ${slots.map((s) => `${s.start}-${s.end}`).join(", ")}`;
+        }).join("<br>");
+      }
+
+      function openEditModalDirect(name) {
+        const employee = employeeList.find((emp) => emp.name === name);
+        if (!employee) return;
+        selectedRow = employee.id;
+        document.getElementById("editEmpName").value = employee.name;
+        document.getElementById("editEmpEmail").value = employee.email;
+        document.getElementById("editEmpPhone").value = employee.phone;
+        document.getElementById("editEmpRole").value = employee.role;
+        renderAvailabilityEditor(employee);
+        document.getElementById("editEmployeeModal").style.display = "flex";
+      }
+
+      function openEmployeeProfile(name) {
+        const emp = employeeList.find((e) => e.name === name);
+        if (!emp) return;
+        const events = getScheduledEventsForEmployee(name);
+        const now = new Date();
+        const upcoming = events
+          .filter((e) => e.start > now)
+          .sort((a, b) => a.start - b.start)[0];
+        const last = events
+          .filter((e) => e.start < now)
+          .sort((a, b) => b.start - a.start)[0];
+        const canManage = currentUser.role === "owner" || currentUser.role === "manager";
+        const modal = document.createElement("div");
+        modal.className = "popup";
+        modal.style.display = "flex";
+        modal.innerHTML = `
+          <div class="popup-content">
+            <button class="close-popup" onclick="this.closest('.popup').remove()">&times;</button>
+            <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem;">
+              <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(
+                emp.name
+              )}&background=00adb5&color=fff" style="width:50px; border-radius:50%;" />
+              <div>
+                <h3 style="margin:0;">${emp.name}</h3>
+                <p style="margin:0;">${emp.role || "Employee"}</p>
+              </div>
+            </div>
+            <h4>Stats</h4>
+            <p>Weekly Hours: ${getWeeklyHours(name)}</p>
+            <p>Avg Weekly Hours (4w): ${getAverageWeeklyHours(name)}</p>
+            <p>Total Shifts This Week: ${getTotalShiftsThisWeek(name)}</p>
+            <h4>Shifts</h4>
+            <p>Next: ${
+              upcoming
+                ? upcoming.start.toLocaleString()
+                : "<span style='color:var(--gray)'>No upcoming shifts</span>"
+            }</p>
+            <p>Last: ${
+              last
+                ? last.start.toLocaleString()
+                : "<span style='color:var(--gray)'>No recent shifts</span>"
+            }</p>
+            <h4>Availability</h4>
+            <div>${renderAvailabilityText(emp)}</div>
+            <div style="margin-top: 1rem; display:flex; gap:0.5rem;">
+              ${
+                canManage
+                  ? '<button class="button" onclick="window.location.href=\'schedule.html\'">Assign Shift</button>'
+                  : ""
+              }
+              ${
+                currentUser.name === name
+                  ? `<button class="button cancel" onclick="this.closest('.popup').remove(); openEditModalDirect('${name.replace(
+                      /'/g,
+                      "\\'"
+                    )}')">Edit Availability</button>`
+                  : ""
+              }
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
       }
 
       document
@@ -933,6 +1220,7 @@
 
             // Store the row reference
             selectedRow = employee.id;
+            renderAvailabilityEditor(employee);
 
             // Show the edit modal
             document.getElementById("editEmployeeModal").style.display = "flex";
@@ -946,6 +1234,8 @@
       function closeEditModal() {
         document.getElementById("editEmployeeModal").style.display = "none";
         document.getElementById("editEmployeeForm").reset();
+        const saveBtn = document.querySelector("#editEmployeeForm button[type='submit']");
+        if (saveBtn) saveBtn.style.display = "";
         selectedRow = null;
         clearRowHighlights();
       }
@@ -961,6 +1251,7 @@
           const email = document.getElementById("editEmpEmail").value;
           const phone = document.getElementById("editEmpPhone").value;
           const role = document.getElementById("editEmpRole").value;
+          const availability = readAvailabilityFromEditor();
 
           // Update the row in the table
           const employeeId = selectedRow;
@@ -973,6 +1264,7 @@
               phone,
               role,
               isKeyholder: role === "Key Holder",
+              availability,
             };
             saveEmployees();
             renderEmployeeTable();
