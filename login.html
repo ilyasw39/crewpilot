@@ -366,6 +366,12 @@
     </div>
 
     <script>
+      function normalizeRole(role) {
+        const normalized = String(role || "").toLowerCase();
+        if (normalized === "owner" || normalized === "manager") return normalized;
+        return "employee";
+      }
+
       function handleLogin(event) {
         event.preventDefault();
         const username = document.getElementById("username").value;
@@ -401,7 +407,7 @@
             "loggedInUser",
             JSON.stringify({
               name: employee.name,
-              role: employee.role,
+              role: normalizeRole(employee.role),
               username: employee.username,
             })
           );
