@@ -594,7 +594,7 @@
       <h1><i class="fas fa-users"></i> Team Management</h1>
       <div class="top-controls">
         <h2>View Employees</h2>
-        <div class="dropdown" id="editControls" style="display: none">
+        <div class="dropdown owner-only" id="editControls" style="display: none">
           <button class="button" onclick="toggleEditMenu()">
             <i class="fas fa-edit"></i> Edit
           </button>
@@ -797,12 +797,10 @@
           window.location.href = "login.html";
         }
 
-        // Show edit controls for owner + manager
-        if (currentUser.role === "owner" || currentUser.role === "manager") {
-          document.getElementById("editControls").style.display = "block";
-        } else {
-          document.getElementById("editControls").style.display = "none";
-        }
+        const editButtons = document.querySelectorAll(".owner-only");
+        editButtons.forEach((btn) => {
+          btn.style.display = currentUser.role === "owner" ? "" : "none";
+        });
 
         // Load employees
         renderEmployeeTable();
