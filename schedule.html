@@ -782,7 +782,7 @@
       </div>
 
       <div class="swap-section">
-        <div class="swap-box">
+        <div class="swap-box" id="swapPoolBox">
           <div class="hours-header">
             <div>
               <h2>Shift Pool</h2>
@@ -792,11 +792,11 @@
           <ul id="swapPoolList"></ul>
         </div>
 
-        <div class="swap-box">
+        <div class="swap-box" id="swapRequestsBox">
           <div class="hours-header">
             <div>
               <h2>Approval Requests</h2>
-              <div>Incoming direct requests for your approval</div>
+              <div>Incoming direct requests for approval</div>
             </div>
           </div>
           <ul id="swapRequestsList"></ul>
@@ -1692,12 +1692,10 @@
         renderSwapRequests();
         updateNotifications();
 
-        const swapPoolBox = document
-          .getElementById("swapPoolList")
-          ?.closest(".swap-box");
-        const swapRequestsBox = document
-          .getElementById("swapRequestsList")
-          ?.closest(".swap-box");
+        // ROLE-BASED VISIBILITY FIX
+        const swapPoolBox = document.getElementById("swapPoolBox");
+        const swapRequestsBox = document.getElementById("swapRequestsBox");
+
         if (user.role === "employee") {
           if (swapRequestsBox) swapRequestsBox.style.display = "none";
         }
