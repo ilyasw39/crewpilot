@@ -1072,8 +1072,7 @@
       migrateSwapPoolShape();
 
       const CONFIG = {
-        MIN_REST_HOURS: 10,
-        MAX_SHIFTS_PER_DAY: 2,
+        MAX_SHIFTS_PER_DAY: 1,
         SHIFT_DURATION: 5,
         ATTEMPTS: 120,
       };
@@ -1230,13 +1229,15 @@
               entry.originalOwner === me || entry.originalEmployee === me;
 
             if (isPoster) {
-              if (entry.status === "posted") {
-                actions.appendChild(
-                  mkBtn("Cancel", "button view-only small", () =>
-                    cancelPoolOffer(pid)
-                  )
-                );
-              } else if (entry.status === "claimed") {
+              actions.appendChild(
+                mkBtn(
+                  entry.status === "claimed" ? "Cancel Pool Offer" : "Cancel",
+                  "button view-only small",
+                  () => cancelPoolOffer(pid)
+                )
+              );
+
+              if (entry.status === "claimed") {
                 const w = document.createElement("span");
                 w.style.cssText = "font-size:0.8rem;opacity:0.85;";
                 w.textContent = "Waiting for approval";
@@ -1469,23 +1470,18 @@
       }
 
       function canAssign(employeeName, start, end, excludeId = null) {
-        const MIN_REST_MS = CONFIG.MIN_REST_HOURS * 60 * 60 * 1000;
         const sameDay = getAllEvents().filter(
           (e) =>
             e.employee === employeeName &&
             e.start.toDateString() === start.toDateString() &&
             e.id !== excludeId
         );
+
         if (sameDay.length >= CONFIG.MAX_SHIFTS_PER_DAY) return false;
-        const restOk = getAllEvents().every(
-          (e) =>
-            e.employee !== employeeName ||
-            e.id === excludeId ||
-            start - new Date(e.end) >= MIN_REST_MS
-        );
-        if (!restOk) return false;
+
         const emp = getEmployeeByName(employeeName);
         if (!emp) return false;
+
         return isEmployeeAvailableForShift(emp, start, start, end);
       }
 
@@ -1511,13 +1507,7 @@
           return;
         }
         if (!canAssign(user.name, new Date(event.start), new Date(event.end), shiftId)) {
-          showErrorMessage("Cannot claim: availability/rest/daily limit not met.");
-          return;
-        }
-        const hoursUntilShift =
-          (new Date(event.start) - new Date()) / (1000 * 60 * 60);
-        if (hoursUntilShift < 24 && poster !== user.name) {
-          showErrorMessage("Too late to claim this shift");
+          showErrorMessage("Cannot claim: availability or daily limit not met.");
           return;
         }
         entry.status = "claimed";
@@ -1532,18 +1522,20 @@
 
       function cancelPoolOffer(poolId) {
         const entry = findPoolEntry(poolId);
-        if (!entry || entry.status !== "posted") return;
+        if (!entry) return;
+
         const poster = entry.originalOwner || entry.originalEmployee || "";
         if (poster !== user.name) {
-          showErrorMessage("Only the poster can cancel.");
+          showErrorMessage("Only the original poster can cancel this offer.");
           return;
         }
+
         AppState.swapPool = AppState.swapPool.filter((s) => s.id !== entry.id);
         syncState();
         renderSwapPool();
         renderCalendarFromState();
         saveEventsToLocalStorage();
-        showSuccessMessage("Removed from pool.");
+        showSuccessMessage("Shift removed from pool.");
       }
 
       function cancelPoolClaimByClaimer(poolId) {
@@ -1610,10 +1602,22 @@
         showSuccessMessage("Claim rejected — shift is open again.");
       }
 
+      function shouldShowOwnerShiftTip() {
+        return localStorage.getItem("hideOwnerShiftTip") !== "true";
+      }
+
       function openShiftActionModal() {
         if (selectedEvents.length !== 1) return;
-        removeShiftActionModal();
+
         const isEmployee = normalizeUserRole(user.role) === "employee";
+        const isManagerView = !isEmployee;
+
+        if (isManagerView && !shouldShowOwnerShiftTip()) {
+          return;
+        }
+
+        removeShiftActionModal();
+
         const modal = document.createElement("div");
         modal.id = "shiftActionModal";
         modal.className = "modal-backdrop active";
@@ -1622,14 +1626,28 @@
             <button class="close-popup" onclick="removeShiftActionModal()">
               <i class="fas fa-times"></i>
             </button>
-            <h2>${isEmployee ? "Manage shift" : "Shift"}</h2>
+
+            <h2>${isEmployee ? "Manage shift" : "Shift shortcuts"}</h2>
+
             <p style="font-size:0.9rem; color:var(--gray); margin-bottom:0.75rem;">
               ${
                 isEmployee
                   ? "Offer this shift to the pool or request a direct swap."
-                  : "Use keyboard shortcuts (R reassign, D duplicate, Del) or the toolbar — pool/swap are for employees."
+                  : "Use keyboard shortcuts: R = reassign, D = duplicate, Delete = remove."
               }
             </p>
+
+            ${
+              isManagerView
+                ? `
+            <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem; font-size:0.9rem;">
+              <input type="checkbox" id="hideOwnerShiftTipCheckbox">
+              Don’t show me this again
+            </label>
+            `
+                : ""
+            }
+
             <div class="button-group">
               ${
                 isEmployee
@@ -1643,13 +1661,22 @@
               `
                   : ""
               }
-              <button class="button" style="background:#6b7280" onclick="removeShiftActionModal()">
+
+              <button class="button" style="background:#6b7280" onclick="closeShiftActionModal()">
                 Close
               </button>
             </div>
           </div>
         `;
         document.body.appendChild(modal);
+      }
+
+      function closeShiftActionModal() {
+        const cb = document.getElementById("hideOwnerShiftTipCheckbox");
+        if (cb && cb.checked) {
+          localStorage.setItem("hideOwnerShiftTip", "true");
+        }
+        removeShiftActionModal();
       }
 
       function removeShiftActionModal() {
@@ -1936,7 +1963,12 @@
                 role === "manager" ||
                 eventEmployee === user.name;
 
-              if (canManageShift) {
+              if (role === "employee" && canManageShift) {
+                openShiftActionModal();
+              } else if (
+                (role === "owner" || role === "manager") &&
+                shouldShowOwnerShiftTip()
+              ) {
                 openShiftActionModal();
               }
             }
@@ -2079,6 +2111,17 @@
         document.querySelectorAll(".schedule-share-btn").forEach((btn) => {
           btn.style.display = user.role === "employee" ? "none" : "";
         });
+
+        const assignSelect = document.getElementById("assignEmpSelect");
+        const assignRole = normalizeUserRole(user.role);
+        if (assignSelect) {
+          assignSelect.style.display =
+            assignRole === "owner" || assignRole === "manager" ? "" : "none";
+        }
+        const assignControls = document.querySelector(".assign-controls");
+        if (assignControls && assignRole === "employee") {
+          assignControls.style.gap = "0.5rem";
+        }
 
         // Initialize employee dropdown
         populateEmployeeDropdown();
