@@ -740,6 +740,17 @@
           >
             <i class="fas fa-file-image"></i> Send as Image
           </button>
+          <p
+            id="scheduleExportHint"
+            class="schedule-share-btn"
+            style="
+              margin: 0.5rem 0 0;
+              font-size: 0.85rem;
+              color: var(--gray);
+              max-width: 44rem;
+              line-height: 1.4;
+            "
+          ></p>
         </div>
         <div class="assign-controls">
           <select id="assignEmpSelect" class="select">
@@ -992,6 +1003,60 @@
             ? selectedDates.some((d) => isSameDay(d, e.start))
             : e.start >= range.start && e.start < range.end
         );
+      }
+
+      function getDefaultRangeDates() {
+        const { start, end } = getDefaultScheduleRange();
+        const out = [];
+        let d = new Date(start);
+        while (d < end) {
+          out.push(new Date(d));
+          d.setDate(d.getDate() + 1);
+        }
+        return out;
+      }
+
+      function markDatesAsSent(dates) {
+        const sent = [...safeParse("sentDates", [])];
+        dates.forEach((dt) => {
+          const key = new Date(dt).toDateString();
+          if (!sent.includes(key)) sent.push(key);
+        });
+        localStorage.setItem("sentDates", JSON.stringify(sent));
+      }
+
+      function highlightSelectedDays() {
+        selectedDays.clear();
+        selectedDates.forEach((d) => selectedDays.add(d.toDateString()));
+
+        calendar.getEvents().forEach((event) => {
+          const isSelected = selectedDays.has(event.start.toDateString());
+          event.setProp("borderColor", isSelected ? "#dc2626" : "");
+          event.setProp("borderWidth", isSelected ? "2px" : "");
+        });
+      }
+
+      function updateScheduleExportSummaryLabel() {
+        const el = document.getElementById("scheduleExportHint");
+        if (!el) return;
+        if (selectedDates.length) {
+          const n = selectedDates.length;
+          el.textContent = `Share will include ${n} selected day${
+            n === 1 ? "" : "s"
+          } (Ctrl/Cmd+click to add or remove days). Shifts on other dates are excluded.`;
+          return;
+        }
+        const { start, end } = getDefaultScheduleRange();
+        const endIncl = new Date(end.getTime() - 86400000);
+        const fmt = (d) =>
+          d.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          });
+        el.textContent = `Share uses the default window: ${fmt(start)} – ${fmt(
+          endIncl
+        )} (next week + 14 days). Drag or click the calendar to choose specific days instead.`;
       }
       function safeParse(key, fallback = []) {
         try {
@@ -1349,6 +1414,7 @@
         selectedEvents = [];
         selectedDays.clear();
         selectedDates = [];
+        updateScheduleExportSummaryLabel();
       }
 
       function createShiftEvent({ employee, shiftType, start, end }) {
@@ -2024,6 +2090,19 @@
               },
             },
           },
+          dayCellDidMount: function (info) {
+            const sent = safeParse("sentDates", []);
+            const dateKey = info.date.toDateString();
+            if (!sent.includes(dateKey)) return;
+            if (info.el.querySelector(".schedule-sent-dot")) return;
+            const dot = document.createElement("div");
+            dot.className = "schedule-sent-dot";
+            dot.setAttribute("aria-hidden", "true");
+            dot.style.cssText =
+              "position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:#22c55e;pointer-events:none;";
+            info.el.style.position = "relative";
+            info.el.appendChild(dot);
+          },
           eventDidMount: function (info) {
             info.el.style.display = "block";
             info.el.style.backgroundColor = info.event.backgroundColor;
@@ -2038,6 +2117,7 @@
               event.setProp("borderColor", "");
               event.setProp("borderWidth", "");
             });
+            updateScheduleExportSummaryLabel();
 
             if (info.jsEvent.shiftKey && canManageSchedule) {
               selectedEvents.push(info.event);
@@ -2079,44 +2159,35 @@
                 event.setProp("borderWidth", "");
               });
               selectedEvents = [];
-              selectedDays.clear();
-              selectedDates.forEach((d) => selectedDays.add(d.toDateString()));
-
-              // Highlight all events on selected days
-              calendar.getEvents().forEach((event) => {
-                const eventDate = event.start.toDateString();
-                if (selectedDays.has(eventDate)) {
-                  event.setProp("borderColor", "#dc2626");
-                  event.setProp("borderWidth", "2px");
-                }
-              });
+              highlightSelectedDays();
+              updateScheduleExportSummaryLabel();
             }
           },
           dateClick: function (info) {
-            if (canManageSchedule) {
-              const clickedDate = info.date.toDateString();
-              const day = new Date(info.date);
-              day.setHours(0, 0, 0, 0);
-              selectedDates = [day];
+            if (!canManageSchedule) return;
 
-              // Clear previous selection
-              selectedEvents.forEach((event) => {
-                event.setProp("borderColor", "");
-                event.setProp("borderWidth", "");
-              });
-              selectedEvents = [];
-              selectedDays.clear();
-              selectedDays.add(clickedDate);
+            const clicked = new Date(info.date);
+            clicked.setHours(0, 0, 0, 0);
 
-              // Highlight all events on selected days
-              calendar.getEvents().forEach((event) => {
-                const eventDate = event.start.toDateString();
-                if (selectedDays.has(eventDate)) {
-                  event.setProp("borderColor", "#dc2626");
-                  event.setProp("borderWidth", "2px");
-                }
-              });
+            selectedEvents.forEach((event) => {
+              event.setProp("borderColor", "");
+              event.setProp("borderWidth", "");
+            });
+            selectedEvents = [];
+
+            if (info.jsEvent.ctrlKey || info.jsEvent.metaKey) {
+              const index = selectedDates.findIndex((d) => isSameDay(d, clicked));
+              if (index >= 0) {
+                selectedDates.splice(index, 1);
+              } else {
+                selectedDates.push(clicked);
+              }
+            } else {
+              selectedDates = [clicked];
             }
+
+            highlightSelectedDays();
+            updateScheduleExportSummaryLabel();
           },
           eventDrop: function (info) {
             const state = getAllEvents().find((e) => e.id === info.event.id);
@@ -2191,6 +2262,7 @@
             selectedEvents = [];
             selectedDays.clear();
             selectedDates = [];
+            updateScheduleExportSummaryLabel();
           }
         });
 
@@ -2224,6 +2296,7 @@
         renderSwapPool();
         renderSwapRequests();
         updateNotifications();
+        updateScheduleExportSummaryLabel();
 
         // ROLE-BASED VISIBILITY FIX
         const swapPoolBox = document.getElementById("swapPoolBox");
@@ -2307,6 +2380,7 @@
                   renderCalendarFromState();
                   selectedDays.clear();
                   selectedDates = [];
+                  updateScheduleExportSummaryLabel();
                   hasUnsavedChanges = true;
                   saveEventsToLocalStorage();
                   showWeeklyHours();
@@ -2646,6 +2720,7 @@
           selectedEvents = [];
           selectedDays.clear();
           selectedDates = [];
+          updateScheduleExportSummaryLabel();
 
         } catch (error) {
           console.error("Error adding event:", error);
@@ -3354,6 +3429,11 @@
       }
 
       function sendScheduleToWhatsApp() {
+        const datesToMark = selectedDates.length
+          ? selectedDates.map((d) => new Date(d))
+          : getDefaultRangeDates();
+        markDatesAsSent(datesToMark);
+
         const range = getActiveScheduleRange();
         const events = getEventsForScheduleExport();
 
@@ -3448,39 +3528,53 @@
             event.setProp("borderColor", "");
             event.setProp("borderWidth", "");
           });
+          calendar.render();
         }
+        updateScheduleExportSummaryLabel();
       }
 
-      function sendImageScheduleToWhatsApp() {
-        const events = getEventsForScheduleExport().sort(
-          (a, b) => a.start - b.start
-        );
+      async function sendImageScheduleToWhatsApp() {
+        const datesToMark = selectedDates.length
+          ? selectedDates.map((d) => new Date(d))
+          : getDefaultRangeDates();
+
+        const wasDark = localStorage.getItem("darkMode") === "true";
+        document.body.classList.remove("dark");
+        await new Promise((r) => setTimeout(r, 100));
+
         const container = document.getElementById("imagePagesContainer");
-        container.innerHTML = "";
-        container.style.display = "block";
+        try {
+          const events = getEventsForScheduleExport().sort(
+            (a, b) => a.start - b.start
+          );
+          container.innerHTML = "";
+          container.style.display = "block";
+          container.style.backgroundColor = "#ffffff";
+          container.style.color = "#111827";
 
-        const chunkSize = 10; // rows per page
-        const chunks = [];
+          const chunkSize = 10;
+          const chunks = [];
+          for (let i = 0; i < events.length; i += chunkSize) {
+            chunks.push(events.slice(i, i + chunkSize));
+          }
 
-        for (let i = 0; i < events.length; i += chunkSize) {
-          chunks.push(events.slice(i, i + chunkSize));
-        }
+          chunks.forEach((chunk) => {
+            const page = document.createElement("div");
+            page.style.display = "inline-block";
+            page.style.width = "fit-content";
+            page.style.height = "fit-content";
+            page.style.boxSizing = "border-box";
+            page.style.fontSize = "14px";
+            page.style.fontFamily = "Arial, sans-serif";
+            page.style.padding = "0";
+            page.style.margin = "0";
+            page.style.backgroundColor = "#ffffff";
+            page.style.color = "#111827";
 
-        chunks.forEach((chunk) => {
-          const page = document.createElement("div");
-          page.style.display = "inline-block";
-          page.style.width = "fit-content";
-          page.style.height = "fit-content";
-          page.style.boxSizing = "border-box";
-          page.style.fontSize = "14px";
-          page.style.fontFamily = "Arial, sans-serif";
-          page.style.padding = "0";
-          page.style.margin = "0";
-
-          page.innerHTML = `
-      <table style="border-collapse: collapse; font-size: 14px;" border="1">
+            page.innerHTML = `
+      <table style="border-collapse: collapse; font-size: 14px; color: #111827; background: #ffffff;" border="1">
         <thead>
-          <tr style="background: #e2e8f0;">
+          <tr style="background: #e2e8f0; color: #111827;">
             <th style="padding: 4px 8px;">DATE</th>
             <th style="padding: 4px 8px;">TIME</th>
             <th style="padding: 4px 8px;">STAFF</th>
@@ -3506,7 +3600,7 @@
               const staff = event.employee;
 
               return `
-              <tr>
+              <tr style="color: #111827; background: #ffffff;">
                 <td style="padding: 4px 8px;">${date}</td>
                 <td style="padding: 4px 8px;">${start}–${end}</td>
                 <td style="padding: 4px 8px;">${staff}</td>
@@ -3516,55 +3610,64 @@
         </tbody>
       </table>
     `;
-          container.appendChild(page);
-        });
+            container.appendChild(page);
+          });
 
-        const pages = Array.from(container.children);
-        const openTab = window.open("", "_blank");
-        openTab.document.write(
-          "<h3 style='font-family:Arial;'>Schedule Images:</h3>"
-        );
+          const pages = Array.from(container.children);
+          const openTab = window.open("", "_blank");
+          openTab.document.write(
+            "<h3 style='font-family:Arial;color:#111827;'>Schedule Images:</h3>"
+          );
 
-        let index = 0;
+          let index = 0;
 
-        function captureNextPage() {
-          if (index >= pages.length) {
-            container.style.display = "none";
-            selectedDates = [];
-            selectedDays.clear();
-            if (calendar) {
-              calendar.unselect();
-              calendar.getEvents().forEach((event) => {
-                event.setProp("borderColor", "");
-                event.setProp("borderWidth", "");
-              });
+          await new Promise((resolve) => {
+            function captureNextPage() {
+              if (index >= pages.length) {
+                container.style.display = "none";
+                container.style.backgroundColor = "";
+                container.style.color = "";
+                markDatesAsSent(datesToMark);
+                selectedDates = [];
+                selectedDays.clear();
+                if (calendar) {
+                  calendar.unselect();
+                  calendar.getEvents().forEach((event) => {
+                    event.setProp("borderColor", "");
+                    event.setProp("borderWidth", "");
+                  });
+                  calendar.render();
+                }
+                updateScheduleExportSummaryLabel();
+                resolve();
+                return;
+              }
+
+              setTimeout(() => {
+                html2canvas(pages[index], {
+                  backgroundColor: "#ffffff",
+                  useCORS: true,
+                  scale: 2,
+                  scrollX: 0,
+                  scrollY: 0,
+                  windowWidth: pages[index].scrollWidth,
+                  windowHeight: pages[index].scrollHeight,
+                }).then((canvas) => {
+                  const img = canvas.toDataURL("image/png");
+                  openTab.document.write(
+                    `<img src="${img}" style="display:block; margin: 0 auto 20px auto;" /><hr/>`
+                  );
+                  index++;
+                  captureNextPage();
+                });
+              }, 150);
             }
-            return;
-          }
 
-          setTimeout(() => {
-            html2canvas(pages[index], {
-              backgroundColor: null,
-              useCORS: true,
-              scale: 2,
-              scrollX: 0,
-              scrollY: 0,
-              windowWidth: pages[index].scrollWidth,
-              windowHeight: pages[index].scrollHeight,
-            }).then((canvas) => {
-              const img = canvas.toDataURL("image/png");
-              openTab.document.write(
-                `<img src="${img}" style="display:block; margin: 0 auto 20px auto;" /><hr/>`
-              );
-              index++;
-              captureNextPage();
-            });
-          }, 150);
+            setTimeout(() => captureNextPage(), 200);
+          });
+        } finally {
+          if (wasDark) document.body.classList.add("dark");
         }
-
-        setTimeout(() => {
-          captureNextPage();
-        }, 200);
       }
       function removeReassignModal() {
         const modal = document.getElementById("reassignModal");
