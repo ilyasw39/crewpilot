@@ -1023,7 +1023,7 @@
       initializeState();
       const CONFIG = {
         MIN_REST_HOURS: 10,
-        MAX_SHIFTS_PER_DAY: 1,
+        MAX_SHIFTS_PER_DAY: 2,
         SHIFT_DURATION: 5,
         ATTEMPTS: 120,
       };
@@ -1060,8 +1060,7 @@
           .toLocaleDateString("en-US", { weekday: "long" })
           .toLowerCase();
         const dayAvailability = getDayAvailability(emp, dayName);
-        if (dayAvailability === null) return true;
-        if (dayAvailability.length === 0) return false;
+        if (!dayAvailability || dayAvailability.length === 0) return true;
 
         return dayAvailability.some((slot) => {
           const start = new Date(currentDate);
@@ -2246,15 +2245,11 @@
 
                 const duration = (endTime - startTime) / (1000 * 60 * 60);
 
-                // Filter available employees
-                let available = employees.filter((emp) => {
-                  if (
-                    (shift.type === "Open" || shift.type === "Close") &&
-                    !emp.isKeyholder
-                  )
-                    return false;
-                  return canAssign(emp.name, startTime, endTime);
-                });
+                // Filter available employees (keyholder rule removed — undefined isKeyholder was blocking everyone)
+                let available = employees.filter((emp) =>
+                  canAssign(emp.name, startTime, endTime)
+                );
+                if (attempt === 0) console.log(available.length);
 
                 if (available.length === 0) {
                   console.warn(`No available employee for ${shift.type} on ${dateKey}`);
@@ -2291,9 +2286,10 @@
               const end = new Date(start);
               end.setHours(end.getHours() + 5);
 
-              let available = employees.filter(
-                (emp) => emp.isKeyholder && canAssign(emp.name, start, end)
+              let available = employees.filter((emp) =>
+                canAssign(emp.name, start, end)
               );
+              if (attempt === 0) console.log(available.length);
 
               if (available.length === 0) {
                 console.warn(`No available employee for Open on ${dateKey}`);
@@ -2320,6 +2316,13 @@
               generatedEvents.push(event);
             }
           }
+
+          console.log(
+            "Generated:",
+            generatedEvents.length,
+            "Missing:",
+            missingShifts.length
+          );
 
           // Calculate fairness score
           let avg =
