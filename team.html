@@ -315,6 +315,12 @@
         position: relative;
       }
 
+      .popup-content h4 {
+        margin-top: 1rem;
+        margin-bottom: 0.3rem;
+        color: var(--primary);
+      }
+
       .popup-content h3 {
         margin-bottom: 1.5rem;
         font-size: 1.6rem;
@@ -355,13 +361,6 @@
       .popup .cancel:hover {
         background: #4b5563;
       }
-      .employee-name {
-        cursor: pointer;
-      }
-      .employee-name:hover {
-        text-decoration: underline;
-      }
-
       .dropdown {
         position: relative;
       }
@@ -594,22 +593,6 @@
       <h1><i class="fas fa-users"></i> Team Management</h1>
       <div class="top-controls">
         <h2>View Employees</h2>
-        <div class="dropdown owner-only" id="editControls" style="display: none">
-          <button class="button" onclick="toggleEditMenu()">
-            <i class="fas fa-edit"></i> Edit
-          </button>
-          <div class="dropdown-menu" id="editMenu">
-            <button onclick="openAddPopup()">
-              <i class="fas fa-user-plus"></i> Add Employee
-            </button>
-            <button onclick="enableEditMode()">
-              <i class="fas fa-edit"></i> Edit Employee
-            </button>
-            <button onclick="enableRemoveMode()">
-              <i class="fas fa-user-minus"></i> Remove Employee
-            </button>
-          </div>
-        </div>
       </div>
 
       <div class="filters">
@@ -764,8 +747,6 @@
         return emp;
       });
       localStorage.setItem("crewEmployees", JSON.stringify(employeeList));
-      let isEditMode = false;
-      let isRemoveMode = false;
       let selectedRow = null;
       let visibleRowsCount = 0;
       let currentUser = null;
@@ -806,11 +787,6 @@
         if (currentUser && !currentUser.role) currentUser.role = "employee";
         if (currentUser) currentUser.role = normalizeRole(currentUser.role);
 
-        const editButtons = document.querySelectorAll(".owner-only");
-        editButtons.forEach((btn) => {
-          btn.style.display = currentUser.role === "owner" ? "" : "none";
-        });
-
         // Load employees
         renderEmployeeTable();
         updateEmployeeCount();
@@ -843,9 +819,11 @@
 
         employeesToShow.forEach((employee) => {
           const row = document.createElement("tr");
+          row.classList.add("interactive-row");
           row.dataset.id = employee.id;
+          row.addEventListener("click", () => openEmployeeProfile(employee.name));
           row.innerHTML = `
-            <td><span class="employee-name" onclick="event.stopPropagation(); openEmployeeProfile('${employee.name.replace(/'/g, "\\'")}')">${employee.name}</span></td>
+            <td>${employee.name}</td>
             <td>${employee.email}</td>
             <td>${employee.phone}</td>
             <td>${employee.role}</td>
@@ -935,18 +913,6 @@
           closepopup();
           showSuccessMessage("Employee added successfully!");
         });
-
-      // Edit Employee functions
-      function enableEditMode() {
-        if (currentUser.role !== "owner" && currentUser.role !== "manager") {
-          showErrorMessage("You do not have permission to edit profiles.");
-          return;
-        }
-        isRemoveMode = false;
-        isEditMode = true;
-        highlightInteractiveRows();
-        showSuccessMessage("Edit mode enabled. Click an employee to edit.");
-      }
 
       function getDefaultAvailability() {
         const availability = {};
@@ -1141,102 +1107,96 @@
       function openEmployeeProfile(name) {
         const emp = employeeList.find((e) => e.name === name);
         if (!emp) return;
+
         const events = getScheduledEventsForEmployee(name);
         const now = new Date();
+
         const upcoming = events
           .filter((e) => e.start > now)
           .sort((a, b) => a.start - b.start)[0];
+
         const last = events
           .filter((e) => e.start < now)
           .sort((a, b) => b.start - a.start)[0];
-        const canManage = currentUser.role === "owner" || currentUser.role === "manager";
+
+        const canEdit =
+          currentUser.role === "owner" ||
+          currentUser.role === "manager" ||
+          currentUser.name === name;
+
         const modal = document.createElement("div");
         modal.className = "popup";
         modal.style.display = "flex";
+
         modal.innerHTML = `
-          <div class="popup-content">
-            <button class="close-popup" onclick="this.closest('.popup').remove()">&times;</button>
-            <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem;">
-              <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(
-                emp.name
-              )}&background=00adb5&color=fff" style="width:50px; border-radius:50%;" />
-              <div>
-                <h3 style="margin:0;">${emp.name}</h3>
-                <p style="margin:0;">${emp.role || "Employee"}</p>
-              </div>
-            </div>
-            <h4>Stats</h4>
-            <p>Weekly Hours: ${getWeeklyHours(name)}</p>
-            <p>Avg Weekly Hours (4w): ${getAverageWeeklyHours(name)}</p>
-            <p>Total Shifts This Week: ${getTotalShiftsThisWeek(name)}</p>
-            <h4>Shifts</h4>
-            <p>Next: ${
-              upcoming
-                ? upcoming.start.toLocaleString()
-                : "<span style='color:var(--gray)'>No upcoming shifts</span>"
-            }</p>
-            <p>Last: ${
-              last
-                ? last.start.toLocaleString()
-                : "<span style='color:var(--gray)'>No recent shifts</span>"
-            }</p>
-            <h4>Availability</h4>
-            <div>${renderAvailabilityText(emp)}</div>
-            <div style="margin-top: 1rem; display:flex; gap:0.5rem;">
-              ${
-                canManage
-                  ? '<button class="button" onclick="window.location.href=\'schedule.html\'">Assign Shift</button>'
-                  : ""
-              }
-              ${
-                currentUser.name === name
-                  ? `<button class="button cancel" onclick="this.closest('.popup').remove(); openEditModalDirect('${name.replace(
-                      /'/g,
-                      "\\'"
-                    )}')">Edit Availability</button>`
-                  : ""
-              }
-            </div>
-          </div>
-        `;
+    <div class="popup-content">
+
+      <button class="close-popup" onclick="this.closest('.popup').remove()">&times;</button>
+
+      <!-- HEADER -->
+      <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem;">
+        <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(
+          emp.name
+        )}&background=00adb5&color=fff"
+             style="width:60px; height:60px; border-radius:50%;" />
+
+        <div>
+          <h2 style="margin:0;">${emp.name}</h2>
+          <p style="margin:0; color:var(--gray);">
+            ${emp.role} ${emp.isKeyholder ? "• Key Holder" : ""}
+          </p>
+        </div>
+      </div>
+
+      <!-- CONTACT -->
+      <div style="margin-bottom:1rem;">
+        <p><strong>Email:</strong> ${emp.email}</p>
+        <p><strong>Phone:</strong> ${emp.phone}</p>
+      </div>
+
+      <!-- STATS -->
+      <div style="margin-bottom:1rem;">
+        <h4>Work Stats</h4>
+        <p><strong>Avg Weekly Hours:</strong> ${getAverageWeeklyHours(name)}</p>
+        <p><strong>This Week:</strong> ${getWeeklyHours(name)} hrs</p>
+        <p><strong>Shifts This Week:</strong> ${getTotalShiftsThisWeek(name)}</p>
+      </div>
+
+      <!-- SHIFTS -->
+      <div style="margin-bottom:1rem;">
+        <h4>Shifts</h4>
+        <p><strong>Next:</strong> ${
+          upcoming
+            ? upcoming.start.toLocaleString()
+            : "<span style='color:var(--gray)'>None</span>"
+        }</p>
+
+        <p><strong>Last:</strong> ${
+          last
+            ? last.start.toLocaleString()
+            : "<span style='color:var(--gray)'>None</span>"
+        }</p>
+      </div>
+
+      <!-- ACTIONS -->
+      <div style="display:flex; gap:0.5rem; margin-top:1rem;">
+        ${
+          canEdit
+            ? `<button class="button" onclick="this.closest('.popup').remove(); openEditModalDirect('${name.replace(
+                /'/g,
+                "\\'"
+              )}')">
+                Edit Profile
+              </button>`
+            : ""
+        }
+      </div>
+
+    </div>
+  `;
+
         document.body.appendChild(modal);
       }
-
-      document
-        .getElementById("employeeTable")
-        .addEventListener("click", function (e) {
-          if (!isEditMode && !isRemoveMode) return;
-
-          const row = e.target.closest("tr");
-          if (!row) return;
-
-          const employeeId = row.dataset.id;
-          const employee = employeeList.find((emp) => emp.id === employeeId);
-
-          if (!employee) return;
-
-          if (isEditMode) {
-            // Fill the edit form with current values
-            const cells = row.getElementsByTagName("td");
-            document.getElementById("editEmpName").value = cells[0].textContent;
-            document.getElementById("editEmpEmail").value =
-              cells[1].textContent;
-            document.getElementById("editEmpPhone").value =
-              cells[2].textContent;
-            document.getElementById("editEmpRole").value = cells[3].textContent;
-
-            // Store the row reference
-            selectedRow = employee.id;
-            renderAvailabilityEditor(employee);
-
-            // Show the edit modal
-            document.getElementById("editEmployeeModal").style.display = "flex";
-            isEditMode = false;
-          } else if (isRemoveMode) {
-            removeEmployee(employee);
-            isRemoveMode = false; // Turn off remove mode after action
-          }
-        });
 
       function closeEditModal() {
         document.getElementById("editEmployeeModal").style.display = "none";
@@ -1280,14 +1240,6 @@
 
           closeEditModal();
         });
-
-      // Remove Employee functions
-      function enableRemoveMode() {
-        isEditMode = false;
-        isRemoveMode = true;
-        highlightInteractiveRows();
-        showSuccessMessage("Remove mode enabled. Click an employee to delete.");
-      }
 
       function removeEmployee(employee) {
         if (!confirm(`Are you sure you want to remove ${employee.name}?`))
@@ -1342,22 +1294,6 @@
         document.getElementById("ballContainer").style.display = enabled
           ? "block"
           : "none";
-      }
-
-      function toggleEditMenu() {
-        const menu = document.getElementById("editMenu");
-        menu.style.display = menu.style.display === "flex" ? "none" : "flex";
-      }
-
-      function highlightInteractiveRows() {
-        const rows = document.querySelectorAll("#employeeTbody tr");
-        rows.forEach((row) => {
-          row.classList.add("interactive-row");
-          row.addEventListener("mouseenter", () => row.classList.add("active"));
-          row.addEventListener("mouseleave", () =>
-            row.classList.remove("active")
-          );
-        });
       }
 
       function clearRowHighlights() {
