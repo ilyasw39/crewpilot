@@ -799,8 +799,8 @@
         <div class="swap-box" id="swapRequestsBox">
           <div class="hours-header">
             <div>
-              <h2>Approval Requests</h2>
-              <div>Incoming direct requests for approval</div>
+              <h2>Swap Requests</h2>
+              <div>Pending direct swaps — recipients can accept or decline</div>
             </div>
           </div>
           <ul id="swapRequestsList"></ul>
@@ -1222,6 +1222,30 @@
         });
       }
 
+      function canAddToPool(fcEvent) {
+        const shiftId = fcEvent.id;
+        const start = new Date(fcEvent.start);
+        const now = new Date();
+        if (start <= now) {
+          return "This shift has already started or passed.";
+        }
+        const hoursUntil = (start - now) / (1000 * 60 * 60);
+        if (hoursUntil <= 24) {
+          return "Shifts must start more than 24 hours from now to add to the pool.";
+        }
+        if (
+          AppState.swapRequests.some(
+            (r) => r.shiftId === shiftId && r.status === "pending"
+          )
+        ) {
+          return "This shift already has pending swap requests.";
+        }
+        if (AppState.swapPool.some((entry) => entry.shiftId === shiftId)) {
+          return "This shift is already in the pool.";
+        }
+        return null;
+      }
+
       function offerSelectedShift() {
         if (selectedEvents.length !== 1) {
           showErrorMessage("Select one shift to offer.");
@@ -1239,12 +1263,9 @@
           showErrorMessage("Shift missing ID");
           return;
         }
-        if (AppState.swapRequests.some((r) => r.shiftId === shiftId && r.status === "pending")) {
-          showErrorMessage("Shift already has pending swap requests");
-          return;
-        }
-        if (AppState.swapPool.some((entry) => entry.shiftId === shiftId)) {
-          showErrorMessage("Shift is already in swap pool.");
+        const poolError = canAddToPool(event);
+        if (poolError) {
+          showErrorMessage(poolError);
           return;
         }
         AppState.swapPool.push({
@@ -1323,6 +1344,7 @@
       function openShiftActionModal() {
         if (selectedEvents.length !== 1) return;
         removeShiftActionModal();
+        const isEmployee = user.role === "employee";
         const modal = document.createElement("div");
         modal.id = "shiftActionModal";
         modal.className = "modal-backdrop active";
@@ -1331,16 +1353,29 @@
             <button class="close-popup" onclick="removeShiftActionModal()">
               <i class="fas fa-times"></i>
             </button>
-            <h2>Reassign / Manage Shift</h2>
+            <h2>${isEmployee ? "Manage shift" : "Shift"}</h2>
+            <p style="font-size:0.9rem; color:var(--gray); margin-bottom:0.75rem;">
+              ${
+                isEmployee
+                  ? "Offer this shift to the pool or request a direct swap."
+                  : "Use keyboard shortcuts (R reassign, D duplicate, Del) or the toolbar — pool/swap are for employees."
+              }
+            </p>
             <div class="button-group">
+              ${
+                isEmployee
+                  ? `
               <button class="button" onclick="offerSelectedShift(); removeShiftActionModal();">
                 Offer to Pool
               </button>
               <button class="button" onclick="openDirectSwapModal()">
                 Swap with Someone
               </button>
+              `
+                  : ""
+              }
               <button class="button" style="background:#6b7280" onclick="removeShiftActionModal()">
-                Cancel
+                Close
               </button>
             </div>
           </div>
@@ -1502,11 +1537,16 @@
                 minute: "2-digit",
               })}`
             : "Shift no longer exists";
+          const canRespond =
+            req.status === "pending" &&
+            (user.role === "owner" ||
+              user.role === "manager" ||
+              req.toEmployee === user.name);
           const li = document.createElement("li");
           li.innerHTML = `
             <span>${req.fromEmployee} → ${req.toEmployee} | ${shiftInfo}</span>
             ${
-              user.role !== "employee"
+              canRespond
                 ? `
               <div>
                 <button class="button view-only small" onclick="acceptSwap('${req.id}')">Accept</button>
@@ -1783,13 +1823,8 @@
         const swapPoolBox = document.getElementById("swapPoolBox");
         const swapRequestsBox = document.getElementById("swapRequestsBox");
 
-        if (user.role === "employee") {
-          if (swapPoolBox) swapPoolBox.style.display = "block";
-          if (swapRequestsBox) swapRequestsBox.style.display = "none";
-        } else {
-          if (swapPoolBox) swapPoolBox.style.display = "block";
-          if (swapRequestsBox) swapRequestsBox.style.display = "block";
-        }
+        if (swapPoolBox) swapPoolBox.style.display = "block";
+        if (swapRequestsBox) swapRequestsBox.style.display = "block";
 
         // Save changes when leaving page
         window.addEventListener("beforeunload", function (e) {
