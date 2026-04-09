@@ -321,6 +321,52 @@
         color: var(--primary);
       }
 
+      .profile-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+      }
+
+      .profile-section {
+        background: var(--primary-light);
+        padding: 0.8rem 1rem;
+        border-radius: var(--radius);
+      }
+
+      .popup-content .profile-section h4 {
+        margin-top: 0;
+        font-size: 0.9rem;
+        margin-bottom: 0.4rem;
+        color: var(--primary);
+      }
+
+      .profile-section p {
+        font-size: 0.9rem;
+        margin: 0.2rem 0;
+      }
+
+      .availability-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+
+      .availability-chip {
+        background: var(--background);
+        border: 1px solid #ddd;
+        padding: 0.3rem 0.5rem;
+        border-radius: 8px;
+        font-size: 0.75rem;
+      }
+
+      body.dark .availability-chip {
+        border-color: #4b5563;
+      }
+
+      .availability-off {
+        opacity: 0.5;
+      }
+
       .popup-content h3 {
         margin-bottom: 1.5rem;
         font-size: 1.6rem;
@@ -1079,17 +1125,28 @@
         ).length;
       }
 
-      function renderAvailabilityText(emp) {
+      function renderAvailabilityChips(emp) {
         const availability = normalizeAvailability(emp.availability);
-        const hasAny = AVAILABILITY_DAYS.some(
-          (day) => (availability[day] || []).length > 0
-        );
-        if (!hasAny) return "<span style='color:var(--gray)'>No availability set</span>";
-        return AVAILABILITY_DAYS.map((day) => {
-          const slots = availability[day] || [];
-          if (!slots.length) return `${day}: Unavailable`;
-          return `${day}: ${slots.map((s) => `${s.start}-${s.end}`).join(", ")}`;
-        }).join("<br>");
+
+        return `
+    <div class="availability-row">
+      ${AVAILABILITY_DAYS.map((day) => {
+        const slots = availability[day] || [];
+        const label = day.slice(0, 3);
+
+        if (!slots.length) {
+          return `<div class="availability-chip availability-off">${label}: Off</div>`;
+        }
+
+        return slots
+          .map(
+            (s) =>
+              `<div class="availability-chip">${label}: ${s.start}-${s.end}</div>`
+          )
+          .join("");
+      }).join("")}
+    </div>
+  `;
       }
 
       function openEditModalDirect(name) {
@@ -1129,7 +1186,7 @@
         modal.style.display = "flex";
 
         modal.innerHTML = `
-    <div class="popup-content">
+    <div class="popup-content" style="max-width:600px;">
 
       <button class="close-popup" onclick="this.closest('.popup').remove()">&times;</button>
 
@@ -1148,49 +1205,64 @@
         </div>
       </div>
 
-      <!-- CONTACT -->
-      <div style="margin-bottom:1rem;">
-        <p><strong>Email:</strong> ${emp.email}</p>
-        <p><strong>Phone:</strong> ${emp.phone}</p>
+      <!-- GRID -->
+      <div class="profile-grid">
+
+        <!-- CONTACT -->
+        <div class="profile-section">
+          <h4>Contact</h4>
+          <p>${emp.email}</p>
+          <p>${emp.phone}</p>
+        </div>
+
+        <!-- STATS -->
+        <div class="profile-section">
+          <h4>Stats</h4>
+          <p>${getWeeklyHours(name)} hrs this week</p>
+          <p>${getAverageWeeklyHours(name)} avg weekly</p>
+          <p>${getTotalShiftsThisWeek(name)} shifts</p>
+        </div>
+
+        <!-- SHIFTS -->
+        <div class="profile-section">
+          <h4>Shifts</h4>
+          <p><strong>Next:</strong><br>
+            ${
+              upcoming
+                ? upcoming.start.toLocaleString()
+                : "None"
+            }
+          </p>
+          <p><strong>Last:</strong><br>
+            ${
+              last
+                ? last.start.toLocaleString()
+                : "None"
+            }
+          </p>
+        </div>
+
+        <!-- AVAILABILITY -->
+        <div class="profile-section">
+          <h4>Availability</h4>
+          ${renderAvailabilityChips(emp)}
+        </div>
+
       </div>
 
-      <!-- STATS -->
-      <div style="margin-bottom:1rem;">
-        <h4>Work Stats</h4>
-        <p><strong>Avg Weekly Hours:</strong> ${getAverageWeeklyHours(name)}</p>
-        <p><strong>This Week:</strong> ${getWeeklyHours(name)} hrs</p>
-        <p><strong>Shifts This Week:</strong> ${getTotalShiftsThisWeek(name)}</p>
-      </div>
-
-      <!-- SHIFTS -->
-      <div style="margin-bottom:1rem;">
-        <h4>Shifts</h4>
-        <p><strong>Next:</strong> ${
-          upcoming
-            ? upcoming.start.toLocaleString()
-            : "<span style='color:var(--gray)'>None</span>"
-        }</p>
-
-        <p><strong>Last:</strong> ${
-          last
-            ? last.start.toLocaleString()
-            : "<span style='color:var(--gray)'>None</span>"
-        }</p>
-      </div>
-
-      <!-- ACTIONS -->
-      <div style="display:flex; gap:0.5rem; margin-top:1rem;">
-        ${
-          canEdit
-            ? `<button class="button" onclick="this.closest('.popup').remove(); openEditModalDirect('${name.replace(
+      <!-- ACTION -->
+      ${
+        canEdit
+          ? `<div style="margin-top:1rem;">
+              <button class="button" onclick="this.closest('.popup').remove(); openEditModalDirect('${name.replace(
                 /'/g,
                 "\\'"
               )}')">
                 Edit Profile
-              </button>`
-            : ""
-        }
-      </div>
+              </button>
+            </div>`
+          : ""
+      }
 
     </div>
   `;
