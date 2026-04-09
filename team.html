@@ -1147,6 +1147,19 @@
         ).length;
       }
 
+      function getAverageShiftsPerWeek(name) {
+        const now = new Date();
+        const totals = [0, 1, 2, 3].map((offset) => {
+          const base = new Date(now);
+          base.setDate(now.getDate() - offset * 7);
+          const { start, end } = getWeekRange(base);
+          return getScheduledEventsForEmployee(name).filter(
+            (e) => e.start >= start && e.start < end
+          ).length;
+        });
+        return (totals.reduce((a, b) => a + b, 0) / totals.length).toFixed(1);
+      }
+
       function renderAvailabilityChips(emp) {
         const availability = normalizeAvailability(emp.availability);
 
@@ -1239,7 +1252,8 @@
           <h4>Stats</h4>
           <p>${getWeeklyHours(name)} hrs this week</p>
           <p>${getAverageWeeklyHours(name)} avg weekly</p>
-          <p>${getTotalShiftsThisWeek(name)} shifts</p>
+          <p>${getTotalShiftsThisWeek(name)} shifts this week</p>
+          <p>${getAverageShiftsPerWeek(name)} avg shifts/week</p>
         </div>
 
         <!-- SHIFTS -->
