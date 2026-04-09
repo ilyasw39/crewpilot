@@ -1129,22 +1129,19 @@
         const availability = normalizeAvailability(emp.availability);
 
         return `
-    <div class="availability-row">
+    <div style="display:flex; flex-wrap:wrap; gap:0.3rem;">
       ${AVAILABILITY_DAYS.map((day) => {
         const slots = availability[day] || [];
         const label = day.slice(0, 3);
 
         if (!slots.length) {
-          return `<div class="availability-chip availability-off">${label}: Off</div>`;
+          return `<span style="font-size:0.7rem; opacity:0.5;">${label}-</span>`;
         }
 
-        return slots
-          .map(
-            (s) =>
-              `<div class="availability-chip">${label}: ${s.start}-${s.end}</div>`
-          )
-          .join("");
-      }).join("")}
+        return `<span style="font-size:0.7rem;">
+          ${label} ${slots.map((s) => s.start + "-" + s.end).join(",")}
+        </span>`;
+      }).join(" • ")}
     </div>
   `;
       }
