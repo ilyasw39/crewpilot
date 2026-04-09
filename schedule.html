@@ -1024,6 +1024,53 @@
         }
       }
       initializeState();
+
+      function migrateSwapPoolShape() {
+        if (!Array.isArray(AppState.swapPool)) return;
+        let changed = false;
+        AppState.swapPool = AppState.swapPool
+          .map((e) => {
+            if (!e || !e.shiftId) return null;
+            if (!e.id) {
+              e.id = generateId();
+              changed = true;
+            }
+            if (e.originalOwner == null && e.originalEmployee != null) {
+              e.originalOwner = e.originalEmployee;
+              changed = true;
+            }
+            if (!e.originalOwner) e.originalOwner = "";
+            if (e.currentHolder == null) {
+              e.currentHolder = e.originalOwner;
+              changed = true;
+            }
+            if (!e.status) {
+              e.status = "posted";
+              changed = true;
+            }
+            if (e.claimedBy === undefined) {
+              e.claimedBy = null;
+              changed = true;
+            }
+            const basePosted = e.postedAt ? new Date(e.postedAt) : new Date();
+            if (!e.postedAt) {
+              e.postedAt = basePosted.toISOString();
+              changed = true;
+            }
+            if (!e.expiresAt) {
+              e.expiresAt = new Date(
+                basePosted.getTime() + 48 * 60 * 60 * 1000
+              ).toISOString();
+              changed = true;
+            }
+            if (!e.shiftType) e.shiftType = "Open";
+            return e;
+          })
+          .filter(Boolean);
+        if (changed) syncState();
+      }
+      migrateSwapPoolShape();
+
       const CONFIG = {
         MIN_REST_HOURS: 10,
         MAX_SHIFTS_PER_DAY: 2,
@@ -1089,14 +1136,39 @@
         });
       }
 
+      /**
+       * Shift pool entry (AppState.swapPool[]):
+       * { id, shiftId, originalOwner, currentHolder, shiftStart, shiftEnd, shiftType,
+       *   status: "posted"|"claimed"|"approved"(removed) | rejected handled inline,
+       *   claimedBy, postedAt, expiresAt }
+       * Flow: posted → claimed → owner approves (calendar → currentHolder) & row removed,
+       *       or reject posted (remove), reject claim (back to posted), poster/claimer cancel.
+       */
       function pruneSwapPool() {
         const now = new Date();
         AppState.swapPool = AppState.swapPool.filter((entry) => {
+          if (!entry || !entry.shiftId) return false;
           const shiftStart = new Date(entry.shiftStart);
           const hoursUntilShift = (shiftStart - now) / (1000 * 60 * 60);
-          return hoursUntilShift > 24;
+          if (hoursUntilShift <= 24) return false;
+          if (entry.expiresAt && now > new Date(entry.expiresAt)) return false;
+          return true;
         });
         syncState();
+      }
+
+      function findPoolEntry(poolIdOrShiftId) {
+        return AppState.swapPool.find(
+          (e) => e.id === poolIdOrShiftId || e.shiftId === poolIdOrShiftId
+        );
+      }
+
+      function isShiftActiveInPool(shiftId) {
+        return AppState.swapPool.some(
+          (s) =>
+            s.shiftId === shiftId &&
+            (s.status === "posted" || s.status === "claimed")
+        );
       }
 
       function renderSwapPool() {
@@ -1104,11 +1176,19 @@
         const list = document.getElementById("swapPoolList");
         if (!list) return;
         list.innerHTML = "";
-        if (AppState.swapPool.length === 0) {
+        const visible = AppState.swapPool.filter(
+          (e) => e.status === "posted" || e.status === "claimed"
+        );
+        if (visible.length === 0) {
           list.innerHTML = "<li style='opacity:0.6'>No shifts available</li>";
           return;
         }
-        AppState.swapPool
+        const isMod =
+          normalizeUserRole(user.role) === "owner" ||
+          normalizeUserRole(user.role) === "manager";
+        const me = user.name;
+
+        visible
           .slice()
           .sort((a, b) => new Date(a.shiftStart) - new Date(b.shiftStart))
           .forEach((entry) => {
@@ -1124,10 +1204,92 @@
               hour: "2-digit",
               minute: "2-digit",
             })}-${end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-            li.innerHTML = `
-              <span>${date} ${time} (${entry.shiftType || "Open"}) - ${entry.originalEmployee}</span>
-              <button class="button view-only small" onclick="takeShift('${entry.shiftId}')">Take Shift</button>
-            `;
+            const ownerLabel = entry.originalOwner || entry.originalEmployee || "?";
+            const statusNote =
+              entry.status === "claimed"
+                ? ` · Claimed by ${entry.claimedBy} (pending approval)`
+                : "";
+
+            const span = document.createElement("span");
+            span.textContent = `${date} ${time} (${entry.shiftType || "Open"}) — ${ownerLabel}${statusNote}`;
+
+            const actions = document.createElement("div");
+            actions.style.cssText =
+              "display:flex;gap:0.35rem;flex-wrap:wrap;align-items:center;";
+
+            const mkBtn = (label, cls, onClick) => {
+              const b = document.createElement("button");
+              b.className = cls || "button view-only small";
+              b.textContent = label;
+              b.onclick = onClick;
+              return b;
+            };
+
+            const pid = entry.id;
+            const isPoster =
+              entry.originalOwner === me || entry.originalEmployee === me;
+
+            if (isPoster) {
+              if (entry.status === "posted") {
+                actions.appendChild(
+                  mkBtn("Cancel", "button view-only small", () =>
+                    cancelPoolOffer(pid)
+                  )
+                );
+              } else if (entry.status === "claimed") {
+                const w = document.createElement("span");
+                w.style.cssText = "font-size:0.8rem;opacity:0.85;";
+                w.textContent = "Waiting for approval";
+                actions.appendChild(w);
+              }
+            }
+
+            if (isMod) {
+              if (entry.status === "posted") {
+                const rej = mkBtn("Reject", "button view-only small", () =>
+                  ownerRejectPoolPosted(pid)
+                );
+                rej.style.background = "#6b7280";
+                actions.appendChild(rej);
+              } else if (entry.status === "claimed") {
+                actions.appendChild(
+                  mkBtn("Accept", "button view-only small", () =>
+                    ownerApprovePoolShift(pid)
+                  )
+                );
+                actions.appendChild(
+                  mkBtn("Reject", "button view-only small", () =>
+                    ownerRejectPoolClaim(pid)
+                  )
+                );
+              }
+            }
+
+            if (!isPoster) {
+              if (entry.status === "posted") {
+                actions.appendChild(
+                  mkBtn("Take Shift", "button view-only small", () =>
+                    claimPoolShift(pid)
+                  )
+                );
+              } else if (entry.status === "claimed") {
+                if (entry.claimedBy === me) {
+                  actions.appendChild(
+                    mkBtn("Cancel Request", "button view-only small", () =>
+                      cancelPoolClaimByClaimer(pid)
+                    )
+                  );
+                } else {
+                  const u = document.createElement("span");
+                  u.style.cssText = "font-size:0.8rem;opacity:0.6;";
+                  u.textContent = "Unavailable";
+                  actions.appendChild(u);
+                }
+              }
+            }
+
+            li.appendChild(span);
+            li.appendChild(actions);
             list.appendChild(li);
           });
       }
@@ -1185,7 +1347,7 @@
       }
 
       function isShiftInPool(shiftId) {
-        return AppState.swapPool.some((s) => s.shiftId === shiftId);
+        return isShiftActiveInPool(shiftId);
       }
 
       function hasPendingSwapRequestForShift(shiftId) {
@@ -1253,7 +1415,7 @@
         ) {
           return "This shift already has pending swap requests.";
         }
-        if (AppState.swapPool.some((entry) => entry.shiftId === shiftId)) {
+        if (isShiftActiveInPool(shiftId)) {
           return "This shift is already in the pool.";
         }
         return null;
@@ -1281,13 +1443,22 @@
           showErrorMessage(poolError);
           return;
         }
+        const postedAt = new Date();
         AppState.swapPool.push({
+          id: generateId(),
           shiftId,
+          originalOwner: eventEmployee,
           originalEmployee: eventEmployee,
+          currentHolder: eventEmployee,
           shiftStart: new Date(event.start),
           shiftEnd: new Date(event.end),
           shiftType: getShiftTypeFromEvent(event),
-          postedAt: new Date(),
+          postedAt: postedAt.toISOString(),
+          expiresAt: new Date(
+            postedAt.getTime() + 48 * 60 * 60 * 1000
+          ).toISOString(),
+          status: "posted",
+          claimedBy: null,
         });
         syncState();
         renderSwapPool();
@@ -1318,16 +1489,23 @@
         return isEmployeeAvailableForShift(emp, start, start, end);
       }
 
-      function takeShift(shiftId) {
-        const entry = AppState.swapPool.find((s) => s.shiftId === shiftId);
+      function claimPoolShift(poolId) {
+        const entry = findPoolEntry(poolId);
         if (!entry) return;
-        if (entry.originalEmployee === user.name) {
+        if (entry.status !== "posted") {
+          showErrorMessage("This shift is no longer available.");
+          return;
+        }
+        const poster =
+          entry.originalOwner || entry.originalEmployee || "";
+        if (poster === user.name) {
           showErrorMessage("You cannot claim your own posted shift.");
           return;
         }
+        const shiftId = entry.shiftId;
         const event = getAllEvents().find((e) => e.id === shiftId);
         if (!event) {
-          AppState.swapPool = AppState.swapPool.filter((s) => s.shiftId !== shiftId);
+          AppState.swapPool = AppState.swapPool.filter((s) => s.id !== entry.id);
           syncState();
           renderSwapPool();
           return;
@@ -1338,20 +1516,98 @@
         }
         const hoursUntilShift =
           (new Date(event.start) - new Date()) / (1000 * 60 * 60);
-        if (hoursUntilShift < 24 && entry.originalEmployee !== user.name) {
+        if (hoursUntilShift < 24 && poster !== user.name) {
           showErrorMessage("Too late to claim this shift");
           return;
         }
+        entry.status = "claimed";
+        entry.claimedBy = user.name;
+        syncState();
+        renderSwapPool();
+        renderCalendarFromState();
+        saveEventsToLocalStorage();
+        clearSelections();
+        showSuccessMessage("Request sent — waiting for manager approval.");
+      }
+
+      function cancelPoolOffer(poolId) {
+        const entry = findPoolEntry(poolId);
+        if (!entry || entry.status !== "posted") return;
+        const poster = entry.originalOwner || entry.originalEmployee || "";
+        if (poster !== user.name) {
+          showErrorMessage("Only the poster can cancel.");
+          return;
+        }
+        AppState.swapPool = AppState.swapPool.filter((s) => s.id !== entry.id);
+        syncState();
+        renderSwapPool();
+        renderCalendarFromState();
+        saveEventsToLocalStorage();
+        showSuccessMessage("Removed from pool.");
+      }
+
+      function cancelPoolClaimByClaimer(poolId) {
+        const entry = findPoolEntry(poolId);
+        if (!entry || entry.status !== "claimed") return;
+        if (entry.claimedBy !== user.name) {
+          showErrorMessage("Only the claimer can cancel this request.");
+          return;
+        }
+        entry.status = "posted";
+        entry.claimedBy = null;
+        syncState();
+        renderSwapPool();
+        renderCalendarFromState();
+        saveEventsToLocalStorage();
+        showSuccessMessage("Claim withdrawn.");
+      }
+
+      function ownerApprovePoolShift(poolId) {
+        const role = normalizeUserRole(user.role);
+        if (role !== "owner" && role !== "manager") return;
+        const entry = findPoolEntry(poolId);
+        if (!entry || entry.status !== "claimed" || !entry.claimedBy) return;
+        const shiftId = entry.shiftId;
+        const newHolder = entry.claimedBy;
         AppState.events = getAllEvents().map((e) =>
-          e.id === shiftId ? { ...e, employee: user.name } : e
+          e.id === shiftId ? { ...e, employee: newHolder } : e
         );
-        AppState.swapPool = AppState.swapPool.filter((s) => s.shiftId !== shiftId);
+        entry.status = "approved";
+        entry.currentHolder = newHolder;
+        AppState.swapPool = AppState.swapPool.filter((s) => s.id !== entry.id);
         syncState();
         renderCalendarFromState();
         saveEventsToLocalStorage();
         renderSwapPool();
         clearSelections();
-        showSuccessMessage("Shift claimed!");
+        showSuccessMessage("Shift reassigned.");
+      }
+
+      function ownerRejectPoolPosted(poolId) {
+        const role = normalizeUserRole(user.role);
+        if (role !== "owner" && role !== "manager") return;
+        const entry = findPoolEntry(poolId);
+        if (!entry || entry.status !== "posted") return;
+        AppState.swapPool = AppState.swapPool.filter((s) => s.id !== entry.id);
+        syncState();
+        renderSwapPool();
+        renderCalendarFromState();
+        saveEventsToLocalStorage();
+        showSuccessMessage("Pool offer removed.");
+      }
+
+      function ownerRejectPoolClaim(poolId) {
+        const role = normalizeUserRole(user.role);
+        if (role !== "owner" && role !== "manager") return;
+        const entry = findPoolEntry(poolId);
+        if (!entry || entry.status !== "claimed") return;
+        entry.status = "posted";
+        entry.claimedBy = null;
+        syncState();
+        renderSwapPool();
+        renderCalendarFromState();
+        saveEventsToLocalStorage();
+        showSuccessMessage("Claim rejected — shift is open again.");
       }
 
       function openShiftActionModal() {
@@ -1443,7 +1699,7 @@
         if (!event || !targetEmployee) return;
         const shiftId = event.id;
         if (!shiftId) return showErrorMessage("Shift missing ID");
-        if (AppState.swapPool.some((s) => s.shiftId === shiftId)) {
+        if (isShiftActiveInPool(shiftId)) {
           showErrorMessage("Shift is already in swap pool");
           return;
         }
