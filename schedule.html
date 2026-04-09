@@ -1052,6 +1052,19 @@
         return employees.find((emp) => emp.name === name);
       }
 
+      function getEligibleEmployees(empList, requireKeyholder) {
+        const isKeyholder = (emp) =>
+          emp.isKeyholder === true || emp.role === "Key Holder";
+        let candidates = empList.filter((emp) => {
+          if (requireKeyholder) return isKeyholder(emp);
+          return true;
+        });
+        if (requireKeyholder && candidates.length === 0) {
+          candidates = empList.slice();
+        }
+        return candidates;
+      }
+
       function getDayAvailability(emp, dayName) {
         const availability = emp?.availability;
         if (!availability || typeof availability !== "object") return null;
@@ -1344,7 +1357,7 @@
       function openShiftActionModal() {
         if (selectedEvents.length !== 1) return;
         removeShiftActionModal();
-        const isEmployee = user.role === "employee";
+        const isEmployee = normalizeUserRole(user.role) === "employee";
         const modal = document.createElement("div");
         modal.id = "shiftActionModal";
         modal.className = "modal-backdrop active";
@@ -1661,9 +1674,10 @@
               info.event.setProp("borderWidth", "2px");
 
               const eventEmployee = getEmployeeFromEvent(info.event);
+              const role = normalizeUserRole(user.role);
               const canManageShift =
-                user.role === "owner" ||
-                user.role === "manager" ||
+                role === "owner" ||
+                role === "manager" ||
                 eventEmployee === user.name;
 
               if (canManageShift) {
@@ -2393,8 +2407,10 @@
 
                 const duration = (endTime - startTime) / (1000 * 60 * 60);
 
-                // Filter available employees (keyholder rule removed — undefined isKeyholder was blocking everyone)
-                let available = employees.filter((emp) =>
+                const requireKeyholder =
+                  shift.type === "Open" || shift.type === "Close";
+                let pool = getEligibleEmployees(employees, requireKeyholder);
+                let available = pool.filter((emp) =>
                   canAssign(emp.name, startTime, endTime)
                 );
                 if (attempt === 0) console.log(available.length);
@@ -2434,7 +2450,8 @@
               const end = new Date(start);
               end.setHours(end.getHours() + 5);
 
-              let available = employees.filter((emp) =>
+              let pool = getEligibleEmployees(employees, true);
+              let available = pool.filter((emp) =>
                 canAssign(emp.name, start, end)
               );
               if (attempt === 0) console.log(available.length);
