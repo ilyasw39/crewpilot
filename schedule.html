@@ -690,7 +690,7 @@
         >
         <a href="schedule.html" style="color: var(--primary)"
           ><i class="fas fa-calendar-alt"></i> Schedule
-          <span id="notifBadge">0</span></a
+          <span id="notifBadge" style="display: none"></span></a
         >
         <a href="team.html"><i class="fas fa-users"></i> Team</a>
         <div class="settings-toggle">
@@ -728,11 +728,14 @@
           <button class="button owner-only" onclick="generateSchedule()">
             <i class="fas fa-magic"></i> Generate Schedule
           </button>
-          <button class="button whatsapp" onclick="sendScheduleToWhatsApp()">
+          <button
+            class="button whatsapp schedule-share-btn"
+            onclick="sendScheduleToWhatsApp()"
+          >
             <i class="fab fa-whatsapp"></i> Share via WhatsApp
           </button>
           <button
-            class="button whatsapp"
+            class="button whatsapp schedule-share-btn"
             onclick="sendImageScheduleToWhatsApp()"
           >
             <i class="fas fa-file-image"></i> Send as Image
@@ -1117,13 +1120,17 @@
       }
 
       function updateNotifications() {
-        if (user.role === "employee") return;
+        const badge = document.getElementById("notifBadge");
+        if (!badge) return;
+        if (user.role === "employee") {
+          badge.textContent = "";
+          badge.style.display = "none";
+          return;
+        }
         const count = AppState.swapRequests.filter(
           (r) => r.toEmployee === user.name && r.status === "pending"
         ).length;
-        const badge = document.getElementById("notifBadge");
-        if (!badge) return;
-        badge.textContent = count;
+        badge.textContent = count > 0 ? String(count) : "";
         badge.style.display = count > 0 ? "inline-block" : "none";
       }
 
@@ -1164,21 +1171,45 @@
         return (AppState.events || []).map(normalizeStateEvent);
       }
 
+      function isShiftInPool(shiftId) {
+        return AppState.swapPool.some((s) => s.shiftId === shiftId);
+      }
+
+      function hasPendingSwapRequestForShift(shiftId) {
+        return AppState.swapRequests.some(
+          (r) => r.shiftId === shiftId && r.status === "pending"
+        );
+      }
+
       function toCalendarEvent(eventLike) {
         const e = normalizeStateEvent(eventLike);
+        const inPool = e.id ? isShiftInPool(e.id) : false;
+        const swapPending = e.id ? hasPendingSwapRequestForShift(e.id) : false;
+        const highlightSwap = inPool || swapPending;
+        const base = getShiftColor(e.shiftType);
+        let backgroundColor = base;
+        let borderColor = base;
+        let textColor = "#fff";
+        if (highlightSwap) {
+          backgroundColor = "#facc15";
+          borderColor = "#ca8a04";
+          textColor = "#111827";
+        }
         return {
           id: e.id,
           title: formatTitle(e),
           start: e.start,
           end: e.end,
           allDay: false,
-          backgroundColor: getShiftColor(e.shiftType),
-          borderColor: getShiftColor(e.shiftType),
-          textColor: "#fff",
+          backgroundColor,
+          borderColor,
+          textColor,
           display: "block",
           extendedProps: {
             employee: e.employee,
             shiftType: e.shiftType,
+            inPool,
+            swapPending,
           },
         };
       }
@@ -1219,13 +1250,15 @@
         AppState.swapPool.push({
           shiftId,
           originalEmployee: eventEmployee,
-          shiftStart: event.start,
-          shiftEnd: event.end,
+          shiftStart: new Date(event.start),
+          shiftEnd: new Date(event.end),
           shiftType: getShiftTypeFromEvent(event),
           postedAt: new Date(),
         });
         syncState();
         renderSwapPool();
+        renderCalendarFromState();
+        updateNotifications();
         clearSelections();
         showSuccessMessage("Shift added to swap pool.");
       }
@@ -1386,6 +1419,7 @@
         });
         syncState();
         renderSwapRequests();
+        renderCalendarFromState();
         updateNotifications();
         clearSelections();
         if (targetEmployee === user.name) return;
@@ -1431,6 +1465,7 @@
         req.status = "rejected";
         syncState();
         renderSwapRequests();
+        renderCalendarFromState();
         updateNotifications();
         clearSelections();
         showSuccessMessage("Swap rejected");
@@ -1729,6 +1764,10 @@
         ownerControls.forEach((btn) => {
           btn.style.display =
             user.role === "owner" || user.role === "manager" ? "" : "none";
+        });
+
+        document.querySelectorAll(".schedule-share-btn").forEach((btn) => {
+          btn.style.display = user.role === "employee" ? "none" : "";
         });
 
         // Initialize employee dropdown
