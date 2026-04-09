@@ -1511,6 +1511,9 @@
         if (!user.role) user.role = "employee";
         console.log("USER:", user);
 
+        const canManageSchedule =
+          user.role === "owner" || user.role === "manager";
+
         // Initialize calendar
         const calendarEl = document.getElementById("calendar");
         calendar = new FullCalendar.Calendar(calendarEl, {
@@ -1520,8 +1523,8 @@
             center: "title",
             right: "dayGridMonth,timeGridWeek",
           },
-          editable: user.role === "owner",
-          selectable: user.role === "owner",
+          editable: canManageSchedule,
+          selectable: canManageSchedule,
           selectMirror: true,
           dayMaxEvents: true,
           slotDuration: "00:15:00",
@@ -1573,7 +1576,7 @@
               event.setProp("borderWidth", "");
             });
 
-            if (info.jsEvent.shiftKey && user.role === "owner") {
+            if (info.jsEvent.shiftKey && canManageSchedule) {
               selectedEvents.push(info.event);
               info.event.setProp("borderColor", "#dc2626");
               info.event.setProp("borderWidth", "2px");
@@ -1581,11 +1584,20 @@
               selectedEvents = [info.event];
               info.event.setProp("borderColor", "#dc2626");
               info.event.setProp("borderWidth", "2px");
-              openShiftActionModal();
+
+              const eventEmployee = getEmployeeFromEvent(info.event);
+              const canManageShift =
+                user.role === "owner" ||
+                user.role === "manager" ||
+                eventEmployee === user.name;
+
+              if (canManageShift) {
+                openShiftActionModal();
+              }
             }
           },
           select: function (info) {
-            if (user.role === "owner") {
+            if (canManageSchedule) {
               selectedEvents.forEach((event) => {
                 event.setProp("borderColor", "");
                 event.setProp("borderWidth", "");
@@ -1615,7 +1627,7 @@
             }
           },
           dateClick: function (info) {
-            if (user.role === "owner") {
+            if (canManageSchedule) {
               const clickedDate = info.date.toDateString();
 
               // Clear previous selection
@@ -1638,10 +1650,23 @@
             }
           },
           eventDrop: function (info) {
+            const state = getAllEvents().find((e) => e.id === info.event.id);
+            if (!state) {
+              info.revert();
+              return;
+            }
+            const moved = {
+              ...state,
+              start: new Date(info.event.start),
+              end: new Date(info.event.end),
+            };
+            if (!canAssign(moved.employee, moved.start, moved.end, moved.id)) {
+              info.revert();
+              showErrorMessage("Cannot move shift there");
+              return;
+            }
             AppState.events = getAllEvents().map((e) =>
-              e.id === info.event.id
-                ? { ...e, start: new Date(info.event.start), end: new Date(info.event.end) }
-                : e
+              e.id === moved.id ? moved : e
             );
             hasUnsavedChanges = true;
             saveEventsToLocalStorage();
@@ -1649,10 +1674,23 @@
             showWeeklyHours();
           },
           eventResize: function (info) {
+            const state = getAllEvents().find((e) => e.id === info.event.id);
+            if (!state) {
+              info.revert();
+              return;
+            }
+            const moved = {
+              ...state,
+              start: new Date(info.event.start),
+              end: new Date(info.event.end),
+            };
+            if (!canAssign(moved.employee, moved.start, moved.end, moved.id)) {
+              info.revert();
+              showErrorMessage("Cannot resize shift there");
+              return;
+            }
             AppState.events = getAllEvents().map((e) =>
-              e.id === info.event.id
-                ? { ...e, start: new Date(info.event.start), end: new Date(info.event.end) }
-                : e
+              e.id === moved.id ? moved : e
             );
             hasUnsavedChanges = true;
             saveEventsToLocalStorage();
@@ -1740,30 +1778,34 @@
 
       // Keyboard shortcuts
       document.addEventListener("keydown", function (e) {
-        if (user.role !== "owner" || !calendar) return;
+        const canManageSchedule =
+          user.role === "owner" || user.role === "manager";
+        if (!canManageSchedule || !calendar) return;
 
         switch (e.key) {
           case "d":
             if (selectedEvents.length > 0) {
-              selectedEvents.forEach((event) => {
-                const newEvent = calendar.addEvent({
-                  title: event.title,
-                  start: new Date(event.start.getTime() + 24 * 60 * 60 * 1000),
-                  end: new Date(event.end.getTime() + 24 * 60 * 60 * 1000),
-                  backgroundColor: event.backgroundColor,
-                  borderColor: event.borderColor,
-                  textColor: event.textColor,
-                  display: "block",
-                  extendedProps: {
-                    employee: getEmployeeFromEvent(event),
-                    shiftType: getShiftTypeFromEvent(event),
-                  },
-                });
-                event.setProp("borderColor", "");
-                newEvent.setProp("borderColor", "#dc2626");
-                newEvent.setProp("borderWidth", "2px");
+              const additions = [];
+              selectedEvents.forEach((fcEvent) => {
+                const state = getAllEvents().find((e) => e.id === fcEvent.id);
+                if (!state) return;
+                additions.push(
+                  createShiftEvent({
+                    employee: state.employee,
+                    shiftType: state.shiftType,
+                    start: new Date(
+                      state.start.getTime() + 24 * 60 * 60 * 1000
+                    ),
+                    end: new Date(state.end.getTime() + 24 * 60 * 60 * 1000),
+                  })
+                );
               });
+              if (additions.length === 0) break;
+              AppState.events = [...getAllEvents(), ...additions];
               hasUnsavedChanges = true;
+              saveEventsToLocalStorage();
+              renderCalendarFromState();
+              selectedEvents = [];
               showWeeklyHours();
               showSuccessMessage("Shift(s) duplicated successfully!");
             }
@@ -2235,13 +2277,45 @@
                 continue;
 
               template.days[dayName].shifts.forEach((shift) => {
+                if (
+                  !shift.startTime ||
+                  !shift.endTime ||
+                  !String(shift.startTime).includes(":") ||
+                  !String(shift.endTime).includes(":")
+                ) {
+                  missingShifts.push(
+                    `${shift.type || "Shift"} on ${dateKey} (invalid template time)`
+                  );
+                  return;
+                }
+
+                const [sh, sm] = String(shift.startTime).split(":").map(Number);
+                const [eh, em] = String(shift.endTime).split(":").map(Number);
+
+                if (
+                  Number.isNaN(sh) ||
+                  Number.isNaN(sm) ||
+                  Number.isNaN(eh) ||
+                  Number.isNaN(em)
+                ) {
+                  missingShifts.push(
+                    `${shift.type || "Shift"} on ${dateKey} (bad time values)`
+                  );
+                  return;
+                }
+
                 const startTime = new Date(currentDate);
-                const [sh, sm] = shift.startTime.split(":");
-                startTime.setHours(parseInt(sh), parseInt(sm));
+                startTime.setHours(sh, sm);
 
                 const endTime = new Date(currentDate);
-                const [eh, em] = shift.endTime.split(":");
-                endTime.setHours(parseInt(eh), parseInt(em));
+                endTime.setHours(eh, em);
+
+                if (endTime <= startTime) {
+                  missingShifts.push(
+                    `${shift.type || "Shift"} on ${dateKey} (end must be after start)`
+                  );
+                  return;
+                }
 
                 const duration = (endTime - startTime) / (1000 * 60 * 60);
 
@@ -2332,6 +2406,13 @@
             .reduce((a, b) => a + b, 0);
           let coveragePenalty = missingShifts.length * 1000;
           let score = coveragePenalty + fairnessScore * 2;
+
+          if (!Number.isFinite(score)) {
+            console.warn(
+              "Skipping schedule attempt: invalid score (check template shift times)"
+            );
+            continue;
+          }
 
           // Keep best schedule
           if (score < bestScore) {
@@ -2768,9 +2849,10 @@
         const shiftRow = btn.closest(".shift-row");
         const newRow = shiftRow.cloneNode(true);
 
-        // Clear input values
-        newRow.querySelectorAll("input").forEach((input) => (input.value = ""));
-        newRow.querySelector("select").selectedIndex = 0;
+        const timeInputs = newRow.querySelectorAll("input");
+        timeInputs[0].value = "09:45";
+        timeInputs[1].value = "14:45";
+        newRow.querySelector("select").value = "Open";
 
         shiftRow.parentNode.appendChild(newRow);
       }
