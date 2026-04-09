@@ -29,16 +29,16 @@
         font-size: 16px;
       }
       body.dark {
-        --background: #111827;
-        --text: #f9fafb;
-        --gray: #cbd5e1;
-        --primary-light: #1f2937;
+        --background: #1e1e2f;
+        --text: #f3f4f6;
+        --gray: #9ca3af;
+        --primary-light: #2c2e3a;
       }
       body.dark .fc {
-        --fc-page-bg-color: #111827;
-        --fc-neutral-bg-color: #1f2937;
-        --fc-neutral-text-color: #f9fafb;
-        --fc-border-color: #374151;
+        --fc-page-bg-color: #1e1e2f;
+        --fc-neutral-bg-color: #2c2e3a;
+        --fc-border-color: #3f3f5a;
+        --fc-neutral-text-color: #f3f4f6;
         --fc-button-bg-color: #00adb5;
         --fc-button-text-color: #ffffff;
         --fc-button-hover-bg-color: #00939a;
@@ -47,7 +47,7 @@
         --fc-event-text-color: #ffffff;
       }
       body.dark #calendar {
-        background: #111827 !important;
+        background: #1e1e2f !important;
       }
 
       body.dark .weekly-hours,
@@ -55,24 +55,24 @@
       body.dark .keyboard-shortcuts,
       body.dark .settings-panel,
       body.dark header {
-        background: #1f2937;
-        border-bottom: 1px solid #374151;
+        background: #2c2e3a;
+        border-bottom: 1px solid #3f3f5a;
       }
 
       body.dark .hours-search,
       body.dark .swap-box li,
       body.dark .keyboard-shortcuts li,
       body.dark .modal-content {
-        background: #111827;
-        color: #f9fafb;
-        border: 1px solid #374151;
+        background: #1e1e2f;
+        color: #f3f4f6;
+        border: 1px solid #3f3f5a;
       }
 
       body.dark .hours-search input,
       body.dark .template-modal input,
       body.dark .template-modal select,
       body.dark .template-modal input[type="time"] {
-        color: #f9fafb;
+        color: #f3f4f6;
       }
       * {
         margin: 0;
@@ -238,21 +238,6 @@
         flex-wrap: wrap;
       }
 
-      #assignEmpSelect {
-        padding: 0.6rem;
-        border-radius: var(--radius);
-        border: 1px solid #e5e7eb;
-        background: white;
-        min-width: 200px;
-        font-size: 0.95rem;
-      }
-
-      body.dark #assignEmpSelect {
-        background: #1f2937;
-        color: #f9fafb;
-        border-color: #374151;
-      }
-
       #calendar {
         background: white;
         padding: 1.5rem;
@@ -263,7 +248,7 @@
       }
 
       body.dark #calendar {
-        background: #111827;
+        background: #1e1e2f;
       }
 
       .weekly-hours {
@@ -363,9 +348,9 @@
       }
 
       body.dark #weeklyHoursList li {
-        background-color: #111827;
-        color: #f9fafb;
-        border: 1px solid #374151;
+        background-color: #1e1e2f;
+        color: #f3f4f6;
+        border: 1px solid #3f3f5a;
       }
 
       .swap-section {
@@ -776,12 +761,6 @@
           </button>
         </div>
         <div class="assign-controls">
-          <select id="assignEmpSelect" class="select">
-            <option value="">Select Employee</option>
-          </select>
-          <button class="button owner-only" onclick="assignShift()">
-            <i class="fas fa-user-plus"></i> Assign Shift
-          </button>
           <button class="button view-only" onclick="offerSelectedShift()">
             <i class="fas fa-exchange-alt"></i> Offer Selected Shift
           </button>
@@ -855,6 +834,9 @@
           <li><kbd>Delete</kbd> Remove selected shift</li>
           <li><kbd>D</kbd> Duplicate selected shift</li>
           <li><kbd>R</kbd> Reassign selected shift</li>
+          <li>
+            <kbd>H</kbd> Toggle sent-day highlight (after clicking the green dot)
+          </li>
         </ul>
       </div>
     </main>
@@ -995,6 +977,7 @@
       let selectedEvents = [];
       let selectedDays = new Set();
       let selectedDates = [];
+      let selectedSentDate = null;
 
       function getDefaultScheduleRange() {
         const now = new Date();
@@ -1323,9 +1306,9 @@
           list.innerHTML = "<li style='opacity:0.6'>No shifts available</li>";
           return;
         }
-        const isMod =
-          normalizeUserRole(user.role) === "owner" ||
-          normalizeUserRole(user.role) === "manager";
+        const role = normalizeUserRole(user.role);
+        const isMod = role === "owner" || role === "manager";
+        const isEmployee = role === "employee";
         const me = user.name;
 
         visible
@@ -1407,26 +1390,25 @@
               }
             }
 
-            if (!isPoster) {
-              if (entry.status === "posted") {
+            if (!isPoster && isEmployee && entry.status === "posted") {
+              actions.appendChild(
+                mkBtn("Take Shift", "button view-only small", () =>
+                  claimPoolShift(pid)
+                )
+              );
+            }
+            if (!isPoster && entry.status === "claimed") {
+              if (entry.claimedBy === me) {
                 actions.appendChild(
-                  mkBtn("Take Shift", "button view-only small", () =>
-                    claimPoolShift(pid)
+                  mkBtn("Cancel Request", "button view-only small", () =>
+                    cancelPoolClaimByClaimer(pid)
                   )
                 );
-              } else if (entry.status === "claimed") {
-                if (entry.claimedBy === me) {
-                  actions.appendChild(
-                    mkBtn("Cancel Request", "button view-only small", () =>
-                      cancelPoolClaimByClaimer(pid)
-                    )
-                  );
-                } else {
-                  const u = document.createElement("span");
-                  u.style.cssText = "font-size:0.8rem;opacity:0.6;";
-                  u.textContent = "Unavailable";
-                  actions.appendChild(u);
-                }
+              } else {
+                const u = document.createElement("span");
+                u.style.cssText = "font-size:0.8rem;opacity:0.6;";
+                u.textContent = "Unavailable";
+                actions.appendChild(u);
               }
             }
 
@@ -2144,7 +2126,11 @@
             dot.className = "schedule-sent-dot";
             dot.setAttribute("aria-hidden", "true");
             dot.style.cssText =
-              "position:absolute;top:4px;left:4px;width:8px;height:8px;border-radius:50%;background:#22c55e;pointer-events:none;z-index:5;";
+              "position:absolute;top:4px;left:4px;width:8px;height:8px;border-radius:50%;background:#22c55e;cursor:pointer;z-index:6;";
+            dot.addEventListener("click", (ev) => {
+              ev.stopPropagation();
+              selectedSentDate = info.date.toDateString();
+            });
             info.el.style.position = "relative";
             info.el.appendChild(dot);
           },
@@ -2233,6 +2219,10 @@
 
             highlightSelectedDays();
             updateScheduleExportSummaryLabel();
+
+            if (selectedDates.length === 1) {
+              openAssignShiftModal(selectedDates[0]);
+            }
           },
           eventDrop: function (info) {
             const state = getAllEvents().find((e) => e.id === info.event.id);
@@ -2322,19 +2312,19 @@
           btn.style.display = user.role === "employee" ? "none" : "";
         });
 
-        const assignSelect = document.getElementById("assignEmpSelect");
         const assignRole = normalizeUserRole(user.role);
-        if (assignSelect) {
-          assignSelect.style.display =
-            assignRole === "owner" || assignRole === "manager" ? "" : "none";
-        }
         const assignControls = document.querySelector(".assign-controls");
         if (assignControls && assignRole === "employee") {
           assignControls.style.gap = "0.5rem";
         }
 
-        // Initialize employee dropdown
-        populateEmployeeDropdown();
+        if (
+          (user.role === "owner" || user.role === "manager") &&
+          !localStorage.getItem("seenAssignDayHint")
+        ) {
+          localStorage.setItem("seenAssignDayHint", "1");
+          showSuccessMessage("Click a day to assign a shift");
+        }
 
         // Show initial hours
         showWeeklyHours();
@@ -2383,6 +2373,9 @@
         const canManageSchedule =
           user.role === "owner" || user.role === "manager";
         if (!canManageSchedule || !calendar) return;
+
+        const tag = e.target && e.target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 
         switch (e.key) {
           case "d":
@@ -2463,6 +2456,24 @@
               showReassignModal();
             } else if (selectedEvents.length > 1) {
               showErrorMessage("Can only reassign one shift at a time");
+            }
+            break;
+          case "h":
+          case "H":
+            e.preventDefault();
+            if (!selectedSentDate) return;
+            {
+              const sent = [...safeParse("sentDates", [])];
+              const index = sent.indexOf(selectedSentDate);
+              if (index >= 0) {
+                sent.splice(index, 1);
+                showSuccessMessage("Day unmarked");
+              } else {
+                sent.push(selectedSentDate);
+                showSuccessMessage("Day marked");
+              }
+              localStorage.setItem("sentDates", JSON.stringify(sent));
+              calendar.render();
             }
             break;
         }
@@ -2691,90 +2702,93 @@
         );
       }
 
-      // Populate employee dropdown
-      function populateEmployeeDropdown() {
-        const select = document.getElementById("assignEmpSelect");
-        select.innerHTML = '<option value="">Select Employee</option>';
-
-        employees.forEach((emp) => {
-          const option = document.createElement("option");
-          option.value = emp.name;
-          option.textContent = emp.name;
-          select.appendChild(option);
-        });
+      function escapeHtmlSchedule(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/"/g, "&quot;");
       }
 
-      // Assign shift
-      function assignShift() {
-        const employee = document.getElementById("assignEmpSelect").value;
+      function openAssignShiftModal(date) {
+        document.getElementById("assignShiftModalBackdrop")?.remove();
+
+        const dayMs = date.getTime();
+        const opts = employees
+          .map(
+            (emp) =>
+              `<option value="${escapeHtmlSchedule(emp.name)}">${escapeHtmlSchedule(
+                emp.name
+              )}</option>`
+          )
+          .join("");
+
+        const modal = document.createElement("div");
+        modal.id = "assignShiftModalBackdrop";
+        modal.className = "modal-backdrop active";
+        modal.innerHTML = `
+    <div class="modal-content">
+      <button type="button" class="close-popup" data-assign-close>
+        <i class="fas fa-times"></i>
+      </button>
+      <h2>Assign Shift</h2>
+      <select id="assignModalEmp" class="select" style="width:100%;margin:1rem 0;padding:0.6rem;border-radius:var(--radius);">
+        <option value="">Select Employee</option>
+        ${opts}
+      </select>
+      <div class="button-group" style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:0.5rem;">
+        <button type="button" class="button" data-assign-confirm>
+          Assign
+        </button>
+        <button type="button" class="button" style="background:#6b7280" data-assign-close>
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+        modal.querySelectorAll("[data-assign-close]").forEach((btn) => {
+          btn.addEventListener("click", () => modal.remove());
+        });
+        modal
+          .querySelector("[data-assign-confirm]")
+          .addEventListener("click", () => confirmAssignShift(dayMs));
+        document.body.appendChild(modal);
+      }
+
+      function confirmAssignShift(dayMs) {
+        const sel = document.getElementById("assignModalEmp");
+        const employee = sel ? sel.value : "";
         if (!employee) {
-          alert("Please select an employee.");
+          showErrorMessage("Select employee");
           return;
         }
 
-        // Get the selected date or use today
-        let selectedDate = calendar.getDate();
-        if (selectedEvents.length > 0) {
-          selectedDate = selectedEvents[0].start;
-        } else if (selectedDays.size > 0) {
-          // Use the first selected day
-          selectedDate = new Date(Array.from(selectedDays)[0]);
-        }
+        const day = new Date(dayMs);
+        const start = new Date(day);
+        start.setHours(9, 0, 0, 0);
 
-        // Set time to 9:45 AM on the selected date
-        const startTime = new Date(selectedDate);
-        startTime.setHours(9, 45, 0, 0);
+        const end = new Date(start);
+        end.setHours(start.getHours() + 3);
 
-        const endTime = new Date(startTime);
-        endTime.setHours(endTime.getHours() + CONFIG.SHIFT_DURATION);
-
-        // If end time is on a different day, adjust it to end at 23:59
-        if (endTime.getDate() !== startTime.getDate()) {
-          endTime.setDate(startTime.getDate());
-          endTime.setHours(23, 59, 0, 0);
-        }
-
-        // Get employee details
-        const emp = employees.find((e) => e.name === employee);
-
-        if (!emp) {
-          alert("Selected employee not found in the system.");
-          return;
-        }
-        if (!canAssign(emp.name, startTime, endTime)) {
+        if (!canAssign(employee, start, end)) {
           showErrorMessage("Cannot assign shift (rules conflict)");
           return;
         }
 
-        try {
-          const newEvent = createShiftEvent({
-            employee: emp.name,
-            shiftType: "Open",
-            start: startTime,
-            end: endTime,
-          });
-          AppState.events = [...getAllEvents(), newEvent];
-          renderCalendarFromState();
+        const newEvent = createShiftEvent({
+          employee,
+          shiftType: "Open",
+          start,
+          end,
+        });
 
-          // Save to localStorage
-          saveEventsToLocalStorage();
+        AppState.events = [...getAllEvents(), newEvent];
+        renderCalendarFromState();
+        saveEventsToLocalStorage();
+        showWeeklyHours();
+        hasUnsavedChanges = true;
 
-          // Clear the employee select
-          document.getElementById("assignEmpSelect").value = "";
-
-          // Update weekly hours
-          showWeeklyHours();
-          hasUnsavedChanges = true;
-          showSuccessMessage("Shift assigned successfully!");
-          selectedEvents = [];
-          selectedDays.clear();
-          selectedDates = [];
-          updateScheduleExportSummaryLabel();
-
-        } catch (error) {
-          console.error("Error adding event:", error);
-          alert("Error creating shift. Please try again.");
-        }
+        document.getElementById("assignShiftModalBackdrop")?.remove();
+        showSuccessMessage("Shift created — drag to adjust");
       }
 
       // Save events to localStorage
