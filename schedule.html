@@ -29,25 +29,50 @@
         font-size: 16px;
       }
       body.dark {
-        --background: #1e1e2f;
-        --text: #f3f4f6;
-        --gray: #9ca3af;
-        --primary-light: #2c2e3a;
+        --background: #111827;
+        --text: #f9fafb;
+        --gray: #cbd5e1;
+        --primary-light: #1f2937;
       }
       body.dark .fc {
-        --fc-page-bg-color: #1e1e2f;
-        --fc-neutral-bg-color: #2c2e3a;
-        --fc-neutral-text-color: #e5e7eb;
-        --fc-border-color: #3f3f46;
+        --fc-page-bg-color: #111827;
+        --fc-neutral-bg-color: #1f2937;
+        --fc-neutral-text-color: #f9fafb;
+        --fc-border-color: #374151;
         --fc-button-bg-color: #00adb5;
-        --fc-button-text-color: white;
-        --fc-button-hover-bg-color: #009aa4;
+        --fc-button-text-color: #ffffff;
+        --fc-button-hover-bg-color: #00939a;
         --fc-event-bg-color: #00adb5;
-        --fc-event-border-color: #009aa4;
+        --fc-event-border-color: #00939a;
         --fc-event-text-color: #ffffff;
       }
       body.dark #calendar {
-        background: #1e1e2f !important;
+        background: #111827 !important;
+      }
+
+      body.dark .weekly-hours,
+      body.dark .swap-box,
+      body.dark .keyboard-shortcuts,
+      body.dark .settings-panel,
+      body.dark header {
+        background: #1f2937;
+        border-bottom: 1px solid #374151;
+      }
+
+      body.dark .hours-search,
+      body.dark .swap-box li,
+      body.dark .keyboard-shortcuts li,
+      body.dark .modal-content {
+        background: #111827;
+        color: #f9fafb;
+        border: 1px solid #374151;
+      }
+
+      body.dark .hours-search input,
+      body.dark .template-modal input,
+      body.dark .template-modal select,
+      body.dark .template-modal input[type="time"] {
+        color: #f9fafb;
       }
       * {
         margin: 0;
@@ -223,9 +248,9 @@
       }
 
       body.dark #assignEmpSelect {
-        background: #2c2e3a;
-        color: #f3f4f6;
-        border-color: #3f3f46;
+        background: #1f2937;
+        color: #f9fafb;
+        border-color: #374151;
       }
 
       #calendar {
@@ -238,7 +263,7 @@
       }
 
       body.dark #calendar {
-        background: #1e1e2f;
+        background: #111827;
       }
 
       .weekly-hours {
@@ -338,8 +363,9 @@
       }
 
       body.dark #weeklyHoursList li {
-        background-color: #2c2e3a;
-        color: #f3f4f6;
+        background-color: #111827;
+        color: #f9fafb;
+        border: 1px solid #374151;
       }
 
       .swap-section {
@@ -710,6 +736,14 @@
         <input type="checkbox" id="ballsToggle" onchange="toggleBalls()" />
         Floating Balls
       </label>
+      <label>
+        <input
+          type="checkbox"
+          id="sentDotsToggle"
+          onchange="toggleSentDots()"
+        />
+        Sent Day Indicators
+      </label>
     </div>
 
     <main>
@@ -740,17 +774,6 @@
           >
             <i class="fas fa-file-image"></i> Send as Image
           </button>
-          <p
-            id="scheduleExportHint"
-            class="schedule-share-btn"
-            style="
-              margin: 0.5rem 0 0;
-              font-size: 0.85rem;
-              color: var(--gray);
-              max-width: 44rem;
-              line-height: 1.4;
-            "
-          ></p>
         </div>
         <div class="assign-controls">
           <select id="assignEmpSelect" class="select">
@@ -821,6 +844,11 @@
       <!-- Keyboard Shortcuts Section -->
       <div class="keyboard-shortcuts">
         <h3><i class="fas fa-keyboard"></i> Keyboard Shortcuts</h3>
+        <div
+          id="scheduleExportHint"
+          class="schedule-share-btn"
+          style="margin-bottom: 1rem; color: var(--gray); line-height: 1.5"
+        ></div>
         <ul>
           <li><kbd>Click</kbd> Select a shift</li>
           <li><kbd>Click + Drag</kbd> Select multiple shifts</li>
@@ -1005,21 +1033,12 @@
         );
       }
 
-      function getDefaultRangeDates() {
-        const { start, end } = getDefaultScheduleRange();
-        const out = [];
-        let d = new Date(start);
-        while (d < end) {
-          out.push(new Date(d));
-          d.setDate(d.getDate() + 1);
-        }
-        return out;
-      }
-
-      function markDatesAsSent(dates) {
+      function markDatesAsSentFromEvents(events) {
         const sent = [...safeParse("sentDates", [])];
-        dates.forEach((dt) => {
-          const key = new Date(dt).toDateString();
+        const keys = [
+          ...new Set(events.map((e) => new Date(e.start).toDateString())),
+        ];
+        keys.forEach((key) => {
           if (!sent.includes(key)) sent.push(key);
         });
         localStorage.setItem("sentDates", JSON.stringify(sent));
@@ -1039,24 +1058,46 @@
       function updateScheduleExportSummaryLabel() {
         const el = document.getElementById("scheduleExportHint");
         if (!el) return;
+
         if (selectedDates.length) {
-          const n = selectedDates.length;
-          el.textContent = `Share will include ${n} selected day${
-            n === 1 ? "" : "s"
-          } (Ctrl/Cmd+click to add or remove days). Shifts on other dates are excluded.`;
-          return;
-        }
-        const { start, end } = getDefaultScheduleRange();
-        const endIncl = new Date(end.getTime() - 86400000);
-        const fmt = (d) =>
-          d.toLocaleDateString("en-US", {
+          const sorted = [...selectedDates].sort((a, b) => a - b);
+          const first = sorted[0].toLocaleDateString("en-US", {
             month: "short",
             day: "numeric",
-            year: "numeric",
           });
-        el.textContent = `Share uses the default window: ${fmt(start)} – ${fmt(
-          endIncl
-        )} (next week + 14 days). Drag or click the calendar to choose specific days instead.`;
+          const last = sorted[sorted.length - 1].toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+          });
+
+          el.innerHTML = `
+      <strong>Sharing:</strong> only the dates you selected on the calendar.
+      ${
+        selectedDates.length === 1
+          ? `Currently selected: ${first}.`
+          : `Currently selected: ${selectedDates.length} dates (${first} to ${last}).`
+      }
+      Use <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + click to add or remove individual days.
+    `;
+          return;
+        }
+
+        const { start, end } = getDefaultScheduleRange();
+        const endIncl = new Date(end.getTime() - 86400000);
+
+        el.innerHTML = `
+    <strong>Sharing:</strong> the default upcoming schedule window when no dates are selected.
+    Current default: ${start.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })} – ${endIncl.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })}.
+    Select specific dates on the calendar if you want to send a custom range instead.
+  `;
       }
       function safeParse(key, fallback = []) {
         try {
@@ -2091,15 +2132,19 @@
             },
           },
           dayCellDidMount: function (info) {
+            const sentDotsEnabled = localStorage.getItem("sentDotsEnabled") !== "false";
+            if (!sentDotsEnabled) return;
+
             const sent = safeParse("sentDates", []);
             const dateKey = info.date.toDateString();
             if (!sent.includes(dateKey)) return;
             if (info.el.querySelector(".schedule-sent-dot")) return;
+
             const dot = document.createElement("div");
             dot.className = "schedule-sent-dot";
             dot.setAttribute("aria-hidden", "true");
             dot.style.cssText =
-              "position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:#22c55e;pointer-events:none;";
+              "position:absolute;top:4px;left:4px;width:8px;height:8px;border-radius:50%;background:#22c55e;pointer-events:none;z-index:5;";
             info.el.style.position = "relative";
             info.el.appendChild(dot);
           },
@@ -2324,6 +2369,10 @@
         } else {
           document.getElementById("ballsToggle").checked = true;
         }
+
+        const sentDotsEnabled =
+          localStorage.getItem("sentDotsEnabled") !== "false";
+        document.getElementById("sentDotsToggle").checked = sentDotsEnabled;
 
         // Initialize template manager
         initializeTemplateManager();
@@ -3064,6 +3113,12 @@
           : "none";
       }
 
+      function toggleSentDots() {
+        const enabled = document.getElementById("sentDotsToggle").checked;
+        localStorage.setItem("sentDotsEnabled", enabled);
+        if (calendar) calendar.render();
+      }
+
       function logout() {
         localStorage.removeItem("loggedInUser");
         window.location.href = "login.html";
@@ -3429,13 +3484,9 @@
       }
 
       function sendScheduleToWhatsApp() {
-        const datesToMark = selectedDates.length
-          ? selectedDates.map((d) => new Date(d))
-          : getDefaultRangeDates();
-        markDatesAsSent(datesToMark);
-
         const range = getActiveScheduleRange();
         const events = getEventsForScheduleExport();
+        markDatesAsSentFromEvents(events);
 
         const periodStart = new Date(range.start);
         const periodEnd = new Date(range.end);
@@ -3534,10 +3585,6 @@
       }
 
       async function sendImageScheduleToWhatsApp() {
-        const datesToMark = selectedDates.length
-          ? selectedDates.map((d) => new Date(d))
-          : getDefaultRangeDates();
-
         const wasDark = localStorage.getItem("darkMode") === "true";
         document.body.classList.remove("dark");
         await new Promise((r) => setTimeout(r, 100));
@@ -3627,7 +3674,7 @@
                 container.style.display = "none";
                 container.style.backgroundColor = "";
                 container.style.color = "";
-                markDatesAsSent(datesToMark);
+                markDatesAsSentFromEvents(events);
                 selectedDates = [];
                 selectedDays.clear();
                 if (calendar) {
