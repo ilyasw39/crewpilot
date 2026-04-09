@@ -367,6 +367,25 @@
         opacity: 0.5;
       }
 
+      #availabilityEditor .avail-week-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 0.4rem;
+        font-size: 0.75rem;
+      }
+
+      @media (max-width: 900px) {
+        #availabilityEditor .avail-week-grid {
+          grid-template-columns: repeat(4, 1fr);
+        }
+      }
+
+      @media (max-width: 520px) {
+        #availabilityEditor .avail-week-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
       .popup-content h3 {
         margin-bottom: 1.5rem;
         font-size: 1.6rem;
@@ -963,7 +982,7 @@
       function getDefaultAvailability() {
         const availability = {};
         AVAILABILITY_DAYS.forEach((day) => {
-          availability[day] = [];
+          availability[day] = [{ start: "00:00", end: "23:59" }];
         });
         return availability;
       }
@@ -973,9 +992,11 @@
         if (!availability || typeof availability !== "object") return normalized;
         AVAILABILITY_DAYS.forEach((day) => {
           const daySlots = Array.isArray(availability[day]) ? availability[day] : [];
-          normalized[day] = daySlots
+          const cleaned = daySlots
             .filter((slot) => slot && slot.start && slot.end)
             .map((slot) => ({ start: slot.start, end: slot.end }));
+          normalized[day] =
+            cleaned.length > 0 ? cleaned : [{ start: "00:00", end: "23:59" }];
         });
         return normalized;
       }
@@ -988,51 +1009,49 @@
           isSelf || currentUser.role === "owner" || currentUser.role === "manager";
 
         editor.innerHTML = `
-          <h4 style="margin: 0.4rem 0 0.2rem;">Availability</h4>
-          ${AVAILABILITY_DAYS.map((day) => {
-            const label = day.charAt(0).toUpperCase() + day.slice(1);
-            const slots = availability[day] || [];
-            const slotsHtml =
-              slots.length > 0
+    <h4 style="margin-bottom:0.5rem;">Availability</h4>
+
+    <div class="avail-week-grid">
+      ${AVAILABILITY_DAYS.map((day) => {
+        const label = day.slice(0, 3).toUpperCase();
+        const slots = availability[day];
+
+        return `
+          <div style="
+            background: var(--primary-light);
+            padding:0.4rem;
+            border-radius:8px;
+          ">
+            <div style="font-weight:600; margin-bottom:0.2rem;">${label}</div>
+
+            ${
+              slots.length
                 ? slots
                     .map(
-                      (slot, index) => `
-                        <div style="display:flex; gap:0.4rem; align-items:center; margin-bottom:0.3rem;">
-                          <input type="time" data-day="${day}" data-index="${index}" data-field="start" value="${slot.start}" ${canEdit ? "" : "disabled"} />
-                          <input type="time" data-day="${day}" data-index="${index}" data-field="end" value="${slot.end}" ${canEdit ? "" : "disabled"} />
-                          ${
-                            canEdit
-                              ? `<button type="button" class="button cancel" style="padding:0.35rem 0.55rem;" onclick="removeAvailabilitySlot('${day}', ${index})">-</button>`
-                              : ""
-                          }
-                        </div>
-                      `
+                      (s, i) => `
+                  <input type="time" data-day="${day}" data-index="${i}" data-field="start" value="${s.start}" style="width:100%; margin-bottom:2px;" ${
+                        canEdit ? "" : "disabled"
+                      }>
+                  <input type="time" data-day="${day}" data-index="${i}" data-field="end" value="${s.end}" style="width:100%;" ${
+                        canEdit ? "" : "disabled"
+                      }>
+                `
                     )
                     .join("")
-                : `<span style="font-size:0.9rem; color:var(--gray);">Not available</span>`;
-            return `
-              <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.35rem;">
-                <label style="min-width:90px;">${label}</label>
-                <div style="flex:1;">
-                  ${slotsHtml}
-                  ${
-                    canEdit
-                      ? `<button type="button" class="button" style="padding:0.35rem 0.55rem;" onclick="addAvailabilitySlot('${day}')">+</button>`
-                      : ""
-                  }
-                </div>
-              </div>
-            `;
-          }).join("")}
-          ${canEdit ? "" : "<p style='font-size:0.85rem; color:var(--gray); margin-top:0.35rem;'>View only.</p>"}
+                : `<div style="opacity:0.5;">24h</div>`
+            }
+          </div>
         `;
+      }).join("")}
+    </div>
+    ${canEdit ? "" : "<p style='font-size:0.85rem; color:var(--gray); margin-top:0.5rem;'>View only.</p>"}
+  `;
 
         const saveBtn = document.querySelector("#editEmployeeForm button[type='submit']");
         if (saveBtn) saveBtn.style.display = canEdit ? "" : "none";
       }
 
       function readAvailabilityFromEditor() {
-        const availability = getDefaultAvailability();
         const inputs = document.querySelectorAll(
           "#availabilityEditor input[data-day]"
         );
@@ -1045,10 +1064,13 @@
           if (!slots[day][index]) slots[day][index] = { start: "", end: "" };
           slots[day][index][field] = input.value;
         });
+        const availability = {};
         AVAILABILITY_DAYS.forEach((day) => {
-          availability[day] = (slots[day] || []).filter(
+          const daySlots = (slots[day] || []).filter(
             (slot) => slot?.start && slot?.end && slot.end > slot.start
           );
+          availability[day] =
+            daySlots.length > 0 ? daySlots : [{ start: "00:00", end: "23:59" }];
         });
         return availability;
       }
