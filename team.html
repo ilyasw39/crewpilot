@@ -1093,6 +1093,7 @@
 
       function getScheduledEventsForEmployee(name) {
         const events = JSON.parse(localStorage.getItem("scheduledShifts")) || [];
+
         return events
           .map((e) => ({
             ...e,
@@ -1100,6 +1101,10 @@
             end: new Date(e.end),
           }))
           .filter((e) => {
+            if (e.employee) return e.employee === name;
+            if (e.extendedProps?.employee)
+              return e.extendedProps.employee === name;
+
             const match = e.title?.match(/^(.+?) \(/);
             return match && match[1] === name;
           });
