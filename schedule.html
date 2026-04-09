@@ -790,7 +790,7 @@
           <div class="hours-header">
             <div>
               <h2>Shift Pool</h2>
-              <div>Swap pool (auto-expires within 24h of shift start)</div>
+              <div>Pool listings expire 48h after posting if still open</div>
             </div>
           </div>
           <ul id="swapPoolList"></ul>
@@ -1147,9 +1147,6 @@
         const now = new Date();
         AppState.swapPool = AppState.swapPool.filter((entry) => {
           if (!entry || !entry.shiftId) return false;
-          const shiftStart = new Date(entry.shiftStart);
-          const hoursUntilShift = (shiftStart - now) / (1000 * 60 * 60);
-          if (hoursUntilShift <= 24) return false;
           if (entry.expiresAt && now > new Date(entry.expiresAt)) return false;
           return true;
         });
@@ -1405,10 +1402,6 @@
         if (start <= now) {
           return "This shift has already started or passed.";
         }
-        const hoursUntil = (start - now) / (1000 * 60 * 60);
-        if (hoursUntil <= 24) {
-          return "Shifts must start more than 24 hours from now to add to the pool.";
-        }
         if (
           AppState.swapRequests.some(
             (r) => r.shiftId === shiftId && r.status === "pending"
@@ -1477,12 +1470,7 @@
             e.id !== excludeId
         );
 
-        if (sameDay.length >= CONFIG.MAX_SHIFTS_PER_DAY) return false;
-
-        const emp = getEmployeeByName(employeeName);
-        if (!emp) return false;
-
-        return isEmployeeAvailableForShift(emp, start, start, end);
+        return sameDay.length < CONFIG.MAX_SHIFTS_PER_DAY;
       }
 
       function claimPoolShift(poolId) {
@@ -1507,7 +1495,7 @@
           return;
         }
         if (!canAssign(user.name, new Date(event.start), new Date(event.end), shiftId)) {
-          showErrorMessage("Cannot claim: availability or daily limit not met.");
+          showErrorMessage("You already have a shift that day (max one per day).");
           return;
         }
         entry.status = "claimed";
