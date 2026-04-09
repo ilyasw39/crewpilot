@@ -955,6 +955,44 @@
       let calendar;
       let selectedEvents = [];
       let selectedDays = new Set();
+      let selectedDates = [];
+
+      function getDefaultScheduleRange() {
+        const now = new Date();
+        const start = new Date(now);
+        const dow = start.getDay();
+        start.setDate(start.getDate() - dow + 7);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 14);
+        return { start, end };
+      }
+
+      function isSameDay(d1, d2) {
+        return d1.toDateString() === d2.toDateString();
+      }
+
+      function getSelectedRangeFromDates() {
+        if (!selectedDates.length) return null;
+        const sorted = [...selectedDates].sort((a, b) => a - b);
+        return {
+          start: new Date(sorted[0]),
+          end: new Date(sorted[sorted.length - 1].getTime() + 86400000),
+        };
+      }
+
+      function getActiveScheduleRange() {
+        return getSelectedRangeFromDates() || getDefaultScheduleRange();
+      }
+
+      function getEventsForScheduleExport() {
+        const range = getActiveScheduleRange();
+        return getAllEvents().filter((e) =>
+          selectedDates.length
+            ? selectedDates.some((d) => isSameDay(d, e.start))
+            : e.start >= range.start && e.start < range.end
+        );
+      }
       function safeParse(key, fallback = []) {
         try {
           return JSON.parse(localStorage.getItem(key)) || fallback;
@@ -1295,13 +1333,13 @@
       function updateNotifications() {
         const badge = document.getElementById("notifBadge");
         if (!badge) return;
-        if (user.role === "employee") {
+        if (normalizeUserRole(user.role) === "employee") {
           badge.textContent = "";
           badge.style.display = "none";
           return;
         }
         const count = AppState.swapRequests.filter(
-          (r) => r.toEmployee === user.name && r.status === "pending"
+          (r) => r.status === "awaiting_approval"
         ).length;
         badge.textContent = count > 0 ? String(count) : "";
         badge.style.display = count > 0 ? "inline-block" : "none";
@@ -1310,6 +1348,7 @@
       function clearSelections() {
         selectedEvents = [];
         selectedDays.clear();
+        selectedDates = [];
       }
 
       function createShiftEvent({ employee, shiftType, start, end }) {
@@ -1350,7 +1389,9 @@
 
       function hasPendingSwapRequestForShift(shiftId) {
         return AppState.swapRequests.some(
-          (r) => r.shiftId === shiftId && r.status === "pending"
+          (r) =>
+            r.shiftId === shiftId &&
+            (r.status === "pending" || r.status === "awaiting_approval")
         );
       }
 
@@ -1404,7 +1445,9 @@
         }
         if (
           AppState.swapRequests.some(
-            (r) => r.shiftId === shiftId && r.status === "pending"
+            (r) =>
+              r.shiftId === shiftId &&
+              (r.status === "pending" || r.status === "awaiting_approval")
           )
         ) {
           return "This shift already has pending swap requests.";
@@ -1723,7 +1766,7 @@
             (r) =>
               r.shiftId === shiftId &&
               r.toEmployee === targetEmployee &&
-              r.status === "pending"
+              (r.status === "pending" || r.status === "awaiting_approval")
           )
         ) {
           return showErrorMessage("Already requested");
@@ -1759,23 +1802,49 @@
       function acceptSwap(requestId) {
         const req = AppState.swapRequests.find((r) => r.id === requestId);
         if (!req || req.status !== "pending") return;
+
         const event = getAllEvents().find((e) => e.id === req.shiftId);
         if (!event) return;
         if (!canAssign(req.toEmployee, new Date(event.start), new Date(event.end), req.shiftId)) {
           showErrorMessage("Cannot take this shift (conflict)");
           return;
         }
+
+        req.status = "awaiting_approval";
+
+        syncState();
+        renderSwapRequests();
+        renderCalendarFromState();
+        updateNotifications();
+        showSuccessMessage("Swap pending manager approval");
+      }
+
+      function ownerApproveDirectSwap(requestId) {
+        const role = normalizeUserRole(user.role);
+        if (role !== "owner" && role !== "manager") return;
+        const req = AppState.swapRequests.find((r) => r.id === requestId);
+        if (!req || req.status !== "awaiting_approval") return;
+
+        const event = getAllEvents().find((e) => e.id === req.shiftId);
+        if (!event) return;
+        if (!canAssign(req.toEmployee, new Date(event.start), new Date(event.end), req.shiftId)) {
+          showErrorMessage("Cannot approve: assignee conflict");
+          return;
+        }
+
         AppState.events = getAllEvents().map((e) =>
           e.id === req.shiftId ? { ...e, employee: req.toEmployee } : e
         );
-        req.status = "accepted";
+
+        req.status = "approved";
+
         syncState();
         renderCalendarFromState();
         saveEventsToLocalStorage();
         renderSwapRequests();
         updateNotifications();
         clearSelections();
-        showSuccessMessage("Shift swapped successfully");
+        showSuccessMessage("Swap approved");
       }
 
       function rejectSwap(requestId) {
@@ -1793,12 +1862,16 @@
       function renderSwapRequests() {
         const list = document.getElementById("swapRequestsList");
         if (!list) return;
+        const role = normalizeUserRole(user.role);
+        const isMod = role === "owner" || role === "manager";
+        const active = (s) => s === "pending" || s === "awaiting_approval";
+
         let requests;
-        if (user.role === "owner" || user.role === "manager") {
-          requests = AppState.swapRequests.filter((r) => r.status === "pending");
+        if (isMod) {
+          requests = AppState.swapRequests.filter((r) => active(r.status));
         } else {
           requests = AppState.swapRequests.filter(
-            (r) => r.toEmployee === user.name && r.status === "pending"
+            (r) => r.toEmployee === user.name && active(r.status)
           );
         }
         list.innerHTML = "";
@@ -1821,25 +1894,55 @@
                 minute: "2-digit",
               })}`
             : "Shift no longer exists";
-          const canRespond =
-            req.status === "pending" &&
-            (user.role === "owner" ||
-              user.role === "manager" ||
-              req.toEmployee === user.name);
+
+          let suffix = "";
+          if (!isMod && req.toEmployee === user.name) {
+            suffix =
+              req.status === "pending"
+                ? " · Pending your response"
+                : " · Pending manager approval";
+          } else if (isMod) {
+            suffix =
+              req.status === "pending"
+                ? " · Waiting for recipient"
+                : " · Needs your approval";
+          }
+
           const li = document.createElement("li");
-          li.innerHTML = `
-            <span>${req.fromEmployee} → ${req.toEmployee} | ${shiftInfo}</span>
-            ${
-              canRespond
-                ? `
-              <div>
-                <button class="button view-only small" onclick="acceptSwap('${req.id}')">Accept</button>
-                <button class="button view-only small" onclick="rejectSwap('${req.id}')" style="background:#6b7280;">Reject</button>
-              </div>
-            `
-                : ""
-            }
-          `;
+          const span = document.createElement("span");
+          span.textContent = `${req.fromEmployee} → ${req.toEmployee} | ${shiftInfo}${suffix}`;
+
+          const actions = document.createElement("div");
+          actions.style.cssText = "display:flex;gap:0.35rem;flex-wrap:wrap;";
+
+          if (!isMod && req.toEmployee === user.name && req.status === "pending") {
+            const b1 = document.createElement("button");
+            b1.className = "button view-only small";
+            b1.textContent = "Accept";
+            b1.onclick = () => acceptSwap(req.id);
+            const b2 = document.createElement("button");
+            b2.className = "button view-only small";
+            b2.textContent = "Reject";
+            b2.style.background = "#6b7280";
+            b2.onclick = () => rejectSwap(req.id);
+            actions.appendChild(b1);
+            actions.appendChild(b2);
+          } else if (isMod && req.status === "awaiting_approval") {
+            const b1 = document.createElement("button");
+            b1.className = "button view-only small";
+            b1.textContent = "Approve";
+            b1.onclick = () => ownerApproveDirectSwap(req.id);
+            const b2 = document.createElement("button");
+            b2.className = "button view-only small";
+            b2.textContent = "Reject";
+            b2.style.background = "#6b7280";
+            b2.onclick = () => rejectSwap(req.id);
+            actions.appendChild(b1);
+            actions.appendChild(b2);
+          }
+
+          li.appendChild(span);
+          if (actions.childNodes.length) li.appendChild(actions);
           list.appendChild(li);
         });
         updateNotifications();
@@ -1930,6 +2033,7 @@
           },
           eventClick: function (info) {
             selectedDays.clear();
+            selectedDates = [];
             calendar.getEvents().forEach((event) => {
               event.setProp("borderColor", "");
               event.setProp("borderWidth", "");
@@ -1963,23 +2067,20 @@
           },
           select: function (info) {
             if (canManageSchedule) {
+              selectedDates = [];
+              let current = new Date(info.start);
+              while (current < info.end) {
+                selectedDates.push(new Date(current));
+                current.setDate(current.getDate() + 1);
+              }
+
               selectedEvents.forEach((event) => {
                 event.setProp("borderColor", "");
                 event.setProp("borderWidth", "");
               });
               selectedEvents = [];
               selectedDays.clear();
-
-              const startDate = new Date(info.start);
-              const endDate = new Date(info.end);
-              endDate.setDate(endDate.getDate() - 1);
-              for (
-                let d = new Date(startDate);
-                d <= endDate;
-                d.setDate(d.getDate() + 1)
-              ) {
-                selectedDays.add(d.toDateString());
-              }
+              selectedDates.forEach((d) => selectedDays.add(d.toDateString()));
 
               // Highlight all events on selected days
               calendar.getEvents().forEach((event) => {
@@ -1994,6 +2095,9 @@
           dateClick: function (info) {
             if (canManageSchedule) {
               const clickedDate = info.date.toDateString();
+              const day = new Date(info.date);
+              day.setHours(0, 0, 0, 0);
+              selectedDates = [day];
 
               // Clear previous selection
               selectedEvents.forEach((event) => {
@@ -2086,6 +2190,7 @@
             });
             selectedEvents = [];
             selectedDays.clear();
+            selectedDates = [];
           }
         });
 
@@ -2201,6 +2306,7 @@
                   AppState.events = getAllEvents().filter((e) => !idsToDelete.has(e.id));
                   renderCalendarFromState();
                   selectedDays.clear();
+                  selectedDates = [];
                   hasUnsavedChanges = true;
                   saveEventsToLocalStorage();
                   showWeeklyHours();
@@ -2539,6 +2645,7 @@
           showSuccessMessage("Shift assigned successfully!");
           selectedEvents = [];
           selectedDays.clear();
+          selectedDates = [];
 
         } catch (error) {
           console.error("Error adding event:", error);
@@ -3247,16 +3354,30 @@
       }
 
       function sendScheduleToWhatsApp() {
-        const view = calendar.view;
-        const periodStart = new Date(view.currentStart);
-        const periodEnd = new Date(view.currentEnd);
+        const range = getActiveScheduleRange();
+        const events = getEventsForScheduleExport();
 
-        // Get events only within the current view range
-        const events = getAllEvents().filter((event) => {
-          return event.start >= periodStart && event.start < periodEnd;
-        });
+        const periodStart = new Date(range.start);
+        const periodEnd = new Date(range.end);
+        const rangeEndLabel = new Date(periodEnd.getTime() - 86400000);
+        const rangeTitle =
+          periodStart.toDateString() === rangeEndLabel.toDateString()
+            ? periodStart.toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })
+            : `${periodStart.toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })} – ${rangeEndLabel.toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}`;
 
-        let message = `*CrewPilot Schedule* (${view.title})\n\n`;
+        let message = `*CrewPilot Schedule* (${rangeTitle})\n\n`;
 
         if (events.length === 0) {
           message += "No shifts scheduled for this period.";
@@ -3318,10 +3439,22 @@
         const encoded = encodeURIComponent(message);
         const url = `https://wa.me/?text=${encoded}`;
         window.open(url, "_blank");
+
+        selectedDates = [];
+        selectedDays.clear();
+        if (calendar) {
+          calendar.unselect();
+          calendar.getEvents().forEach((event) => {
+            event.setProp("borderColor", "");
+            event.setProp("borderWidth", "");
+          });
+        }
       }
 
       function sendImageScheduleToWhatsApp() {
-        const events = getAllEvents().sort((a, b) => a.start - b.start);
+        const events = getEventsForScheduleExport().sort(
+          (a, b) => a.start - b.start
+        );
         const container = document.getElementById("imagePagesContainer");
         container.innerHTML = "";
         container.style.display = "block";
@@ -3397,6 +3530,15 @@
         function captureNextPage() {
           if (index >= pages.length) {
             container.style.display = "none";
+            selectedDates = [];
+            selectedDays.clear();
+            if (calendar) {
+              calendar.unselect();
+              calendar.getEvents().forEach((event) => {
+                event.setProp("borderColor", "");
+                event.setProp("borderWidth", "");
+              });
+            }
             return;
           }
 
