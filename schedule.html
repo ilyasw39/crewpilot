@@ -864,6 +864,7 @@
           <li>
             <kbd>H</kbd> Toggle sent-day highlight (after clicking the green dot)
           </li>
+          <li><kbd>A</kbd> Assign shift to selected day</li>
         </ul>
       </div>
     </main>
@@ -1066,7 +1067,8 @@
         });
       }
 
-      function mountSentDayDot(mountArg) {
+      function mountSentDayDot(mountArg, options) {
+        const force = options && options.force;
         const sentDotsEnabled = localStorage.getItem("sentDotsEnabled") !== "false";
         if (!sentDotsEnabled) return;
 
@@ -1075,7 +1077,7 @@
         const view = mountArg.view;
         const sent = safeParse("sentDates", []);
         const dateKey = date.toDateString();
-        if (!sent.includes(dateKey)) return;
+        if (!force && !sent.includes(dateKey)) return;
         if (el.querySelector(".sent-dot-wrapper")) return;
 
         el.style.position = el.style.position || "relative";
@@ -1118,6 +1120,13 @@
           dot.classList.add("selected");
           selectedDotEl = dot;
         }
+      }
+
+      function maybeShowPressAAssignHint() {
+        if (selectedDates.length !== 1) return;
+        if (sessionStorage.getItem("pressAAssignHintOnce")) return;
+        sessionStorage.setItem("pressAAssignHintOnce", "1");
+        showSuccessMessage("Press A to assign shift");
       }
 
       function updateScheduleExportSummaryLabel() {
@@ -2263,6 +2272,7 @@
               selectedEvents = [];
               highlightSelectedDays();
               updateScheduleExportSummaryLabel();
+              maybeShowPressAAssignHint();
             }
           },
           dateClick: function (info) {
@@ -2290,10 +2300,7 @@
 
             highlightSelectedDays();
             updateScheduleExportSummaryLabel();
-
-            if (selectedDates.length === 1) {
-              openAssignShiftModal(selectedDates[0]);
-            }
+            maybeShowPressAAssignHint();
           },
           eventDrop: function (info) {
             const state = getAllEvents().find((e) => e.id === info.event.id);
@@ -2394,7 +2401,7 @@
           !localStorage.getItem("seenAssignDayHint")
         ) {
           localStorage.setItem("seenAssignDayHint", "1");
-          showSuccessMessage("Click a day to assign a shift");
+          showSuccessMessage("Click a day, then press A to assign a shift");
         }
 
         // Show initial hours
@@ -2529,24 +2536,47 @@
               showErrorMessage("Can only reassign one shift at a time");
             }
             break;
+          case "a":
+          case "A":
+            e.preventDefault();
+            if (selectedDates.length === 1) {
+              openAssignShiftModal(selectedDates[0]);
+            } else {
+              showErrorMessage("Select one day to assign a shift");
+            }
+            break;
           case "h":
           case "H":
             e.preventDefault();
             if (!selectedSentDate) return;
-            {
-              const sent = [...safeParse("sentDates", [])];
-              const index = sent.indexOf(selectedSentDate);
-              if (index >= 0) {
-                sent.splice(index, 1);
-                showSuccessMessage("Day unmarked");
-                selectedSentDate = null;
-                selectedDotEl = null;
-              } else {
-                sent.push(selectedSentDate);
-                showSuccessMessage("Day marked");
-              }
+
+            let sent = [...safeParse("sentDates", [])];
+            const index = sent.indexOf(selectedSentDate);
+
+            const dot = selectedDotEl;
+
+            if (index >= 0) {
+              sent.splice(index, 1);
+              showSuccessMessage("Day unmarked");
               localStorage.setItem("sentDates", JSON.stringify(sent));
-              calendar.render();
+              dot?.closest(".sent-dot-wrapper")?.remove();
+              selectedSentDate = null;
+              selectedDotEl = null;
+            } else {
+              sent.push(selectedSentDate);
+              localStorage.setItem("sentDates", JSON.stringify(sent));
+              showSuccessMessage("Day marked");
+              const cell = dot?.closest(".fc-daygrid-day, .fc-col-header-cell");
+              if (cell && !cell.querySelector(".sent-dot-wrapper")) {
+                mountSentDayDot(
+                  {
+                    el: cell,
+                    date: new Date(selectedSentDate),
+                    view: calendar.view,
+                  },
+                  { force: true }
+                );
+              }
             }
             break;
         }
