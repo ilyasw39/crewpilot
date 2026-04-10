@@ -651,6 +651,33 @@
       .button.whatsapp:hover {
         background-color: #128c7e;
       }
+
+      .fc-daygrid-day .sent-dot,
+      .fc-col-header-cell .sent-dot {
+        width: 8px;
+        height: 8px;
+        background: #22c55e;
+        border-radius: 50%;
+        margin-top: 2px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+      }
+
+      .fc-daygrid-day .sent-dot:hover,
+      .fc-col-header-cell .sent-dot:hover {
+        transform: scale(1.4);
+        box-shadow: 0 0 6px #22c55e;
+      }
+
+      .fc-daygrid-day .sent-dot.selected,
+      .fc-col-header-cell .sent-dot.selected {
+        transform: scale(1.6);
+        box-shadow:
+          0 0 10px #22c55e,
+          0 0 20px rgba(34, 197, 94, 0.4);
+        outline: 2px solid #22c55e;
+      }
     </style>
   </head>
   <body>
@@ -978,6 +1005,7 @@
       let selectedDays = new Set();
       let selectedDates = [];
       let selectedSentDate = null;
+      let selectedDotEl = null;
 
       function getDefaultScheduleRange() {
         const now = new Date();
@@ -1036,6 +1064,60 @@
           event.setProp("borderColor", isSelected ? "#dc2626" : "");
           event.setProp("borderWidth", isSelected ? "2px" : "");
         });
+      }
+
+      function mountSentDayDot(mountArg) {
+        const sentDotsEnabled = localStorage.getItem("sentDotsEnabled") !== "false";
+        if (!sentDotsEnabled) return;
+
+        const el = mountArg.el;
+        const date = mountArg.date;
+        const view = mountArg.view;
+        const sent = safeParse("sentDates", []);
+        const dateKey = date.toDateString();
+        if (!sent.includes(dateKey)) return;
+        if (el.querySelector(".sent-dot-wrapper")) return;
+
+        el.style.position = el.style.position || "relative";
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "sent-dot-wrapper";
+        wrapper.style.cssText =
+          "position:absolute;top:2px;left:0;right:0;display:flex;justify-content:center;align-items:flex-start;cursor:pointer;padding:6px 12px 14px;z-index:6;box-sizing:border-box;";
+        if (view && view.type.startsWith("timeGrid")) {
+          wrapper.style.top = "4px";
+        }
+
+        const dot = document.createElement("div");
+        dot.className = "sent-dot schedule-sent-dot";
+        dot.setAttribute("aria-hidden", "true");
+
+        const activateSentDot = (ev) => {
+          ev.stopPropagation();
+          const reclickSame =
+            selectedSentDate === dateKey &&
+            selectedDotEl === dot &&
+            dot.classList.contains("selected");
+          if (selectedDotEl && selectedDotEl.isConnected && selectedDotEl !== dot) {
+            selectedDotEl.classList.remove("selected");
+          }
+          selectedSentDate = dateKey;
+          selectedDotEl = dot;
+          dot.classList.add("selected");
+          if (!reclickSame) {
+            showSuccessMessage("Press H to toggle highlight");
+          }
+        };
+
+        wrapper.addEventListener("click", activateSentDot);
+
+        wrapper.appendChild(dot);
+        el.appendChild(wrapper);
+
+        if (selectedSentDate === dateKey) {
+          dot.classList.add("selected");
+          selectedDotEl = dot;
+        }
       }
 
       function updateScheduleExportSummaryLabel() {
@@ -2114,25 +2196,14 @@
             },
           },
           dayCellDidMount: function (info) {
-            const sentDotsEnabled = localStorage.getItem("sentDotsEnabled") !== "false";
-            if (!sentDotsEnabled) return;
-
-            const sent = safeParse("sentDates", []);
-            const dateKey = info.date.toDateString();
-            if (!sent.includes(dateKey)) return;
-            if (info.el.querySelector(".schedule-sent-dot")) return;
-
-            const dot = document.createElement("div");
-            dot.className = "schedule-sent-dot";
-            dot.setAttribute("aria-hidden", "true");
-            dot.style.cssText =
-              "position:absolute;top:4px;left:4px;width:8px;height:8px;border-radius:50%;background:#22c55e;cursor:pointer;z-index:6;";
-            dot.addEventListener("click", (ev) => {
-              ev.stopPropagation();
-              selectedSentDate = info.date.toDateString();
-            });
-            info.el.style.position = "relative";
-            info.el.appendChild(dot);
+            if (info.view.type.startsWith("dayGrid")) {
+              mountSentDayDot(info);
+            }
+          },
+          dayHeaderDidMount: function (arg) {
+            if (arg.view.type.startsWith("timeGrid")) {
+              mountSentDayDot(arg);
+            }
           },
           eventDidMount: function (info) {
             info.el.style.display = "block";
@@ -2468,6 +2539,8 @@
               if (index >= 0) {
                 sent.splice(index, 1);
                 showSuccessMessage("Day unmarked");
+                selectedSentDate = null;
+                selectedDotEl = null;
               } else {
                 sent.push(selectedSentDate);
                 showSuccessMessage("Day marked");
@@ -2731,11 +2804,18 @@
         <i class="fas fa-times"></i>
       </button>
       <h2>Assign Shift</h2>
-      <select id="assignModalEmp" class="select" style="width:100%;margin:1rem 0;padding:0.6rem;border-radius:var(--radius);">
+      <select id="assignModalEmp" class="select" style="width:100%;margin:1rem 0 0;padding:0.6rem;border-radius:var(--radius);">
         <option value="">Select Employee</option>
         ${opts}
       </select>
-      <div class="button-group" style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:0.5rem;">
+      <select id="assignShiftType" class="select" style="width:100%;margin:0.75rem 0 0;padding:0.6rem;border-radius:var(--radius);">
+        <option value="">Select Shift Type</option>
+        <option value="Morning">Morning</option>
+        <option value="Afternoon">Afternoon</option>
+        <option value="Evening">Evening</option>
+        <option value="Custom">Custom</option>
+      </select>
+      <div class="button-group" style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:1rem;">
         <button type="button" class="button" data-assign-confirm>
           Assign
         </button>
@@ -2755,19 +2835,33 @@
       }
 
       function confirmAssignShift(dayMs) {
-        const sel = document.getElementById("assignModalEmp");
-        const employee = sel ? sel.value : "";
-        if (!employee) {
-          showErrorMessage("Select employee");
+        const empEl = document.getElementById("assignModalEmp");
+        const typeEl = document.getElementById("assignShiftType");
+        const employee = empEl ? empEl.value : "";
+        const shiftType = typeEl ? typeEl.value : "";
+
+        if (!employee || !shiftType) {
+          showErrorMessage("Select employee and shift type");
           return;
         }
 
         const day = new Date(dayMs);
         const start = new Date(day);
-        start.setHours(9, 0, 0, 0);
+        const end = new Date(day);
 
-        const end = new Date(start);
-        end.setHours(start.getHours() + 3);
+        if (shiftType === "Morning") {
+          start.setHours(8, 0, 0, 0);
+          end.setHours(12, 0, 0, 0);
+        } else if (shiftType === "Afternoon") {
+          start.setHours(12, 0, 0, 0);
+          end.setHours(17, 0, 0, 0);
+        } else if (shiftType === "Evening") {
+          start.setHours(17, 0, 0, 0);
+          end.setHours(22, 0, 0, 0);
+        } else {
+          start.setHours(9, 0, 0, 0);
+          end.setHours(12, 0, 0, 0);
+        }
 
         if (!canAssign(employee, start, end)) {
           showErrorMessage("Cannot assign shift (rules conflict)");
@@ -2776,7 +2870,7 @@
 
         const newEvent = createShiftEvent({
           employee,
-          shiftType: "Open",
+          shiftType,
           start,
           end,
         });
@@ -2788,7 +2882,7 @@
         hasUnsavedChanges = true;
 
         document.getElementById("assignShiftModalBackdrop")?.remove();
-        showSuccessMessage("Shift created — drag to adjust");
+        showSuccessMessage(`${shiftType} shift created — drag to adjust`);
       }
 
       // Save events to localStorage
@@ -2800,14 +2894,22 @@
       // Get shift color
       function getShiftColor(shiftType) {
         switch (shiftType) {
+          case "Morning":
+            return "#3b82f6";
+          case "Afternoon":
+            return "#f59e0b";
+          case "Evening":
+            return "#8b5cf6";
+          case "Custom":
+            return "#10b981";
           case "Open":
-            return "#4CAF50"; // Green
+            return "#4CAF50";
           case "Close":
-            return "#F44336"; // Red
+            return "#F44336";
           case "Floor":
-            return "#2196F3"; // Blue
+            return "#2196F3";
           default:
-            return "#9E9E9E"; // Grey
+            return "#10b981";
         }
       }
 
