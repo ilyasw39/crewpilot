@@ -1,0 +1,4257 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Schedule - CrewPilot</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css"
+      rel="stylesheet"
+    />
+    <link href="styles/global.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+      :root {
+        --primary: #00adb5;
+        --primary-light: #eef2ff;
+        --background: #ffffff;
+        --text: #111827;
+        --gray: #6b7280;
+        --radius: 14px;
+        font-size: 16px;
+      }
+      body.dark {
+        --background: #1e1e2f;
+        --text: #f3f4f6;
+        --gray: #9ca3af;
+        --primary-light: #2c2e3a;
+      }
+      body.dark .fc {
+        --fc-page-bg-color: #1e1e2f;
+        --fc-neutral-bg-color: #2c2e3a;
+        --fc-border-color: #3f3f5a;
+        --fc-neutral-text-color: #f3f4f6;
+        --fc-button-bg-color: #00adb5;
+        --fc-button-text-color: #ffffff;
+        --fc-button-hover-bg-color: #00939a;
+        --fc-event-bg-color: #00adb5;
+        --fc-event-border-color: #00939a;
+        --fc-event-text-color: #ffffff;
+      }
+      body.dark #calendar {
+        background: #1e1e2f !important;
+      }
+
+      body.dark .weekly-hours,
+      body.dark .swap-box,
+      body.dark .keyboard-shortcuts,
+      body.dark .settings-panel,
+      body.dark header {
+        background: #2c2e3a;
+        border-bottom: 1px solid #3f3f5a;
+      }
+
+      body.dark .hours-search,
+      body.dark .swap-box li,
+      body.dark .keyboard-shortcuts li,
+      body.dark .modal-content {
+        background: #1e1e2f;
+        color: #f3f4f6;
+        border: 1px solid #3f3f5a;
+      }
+
+      body.dark .hours-search input,
+      body.dark .template-modal input,
+      body.dark .template-modal select,
+      body.dark .template-modal input[type="time"] {
+        color: #f3f4f6;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: var(--background);
+        color: var(--text);
+        min-height: 100vh;
+        transition: background 0.3s ease, color 0.3s ease;
+        position: relative;
+        overflow-x: hidden;
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-image: linear-gradient(
+            to right,
+            rgba(0, 0, 0, 0.08) 2px,
+            transparent 2px
+          ),
+          linear-gradient(to bottom, rgba(0, 0, 0, 0.08) 2px, transparent 2px);
+        background-size: 140px 140px;
+        z-index: -1;
+      }
+      header {
+        padding: 1rem 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: var(--primary-light);
+        border-bottom: 1px solid #e5e7eb;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+      }
+      .logo img {
+        max-height: 42px;
+        cursor: pointer;
+        transition: transform 0.3s ease;
+      }
+      .logo:hover img {
+        transform: scale(1.05);
+      }
+      nav {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+      nav a {
+        text-decoration: none;
+        font-weight: 600;
+        color: var(--text);
+        transition: color 0.2s ease;
+        position: relative;
+        padding: 0.5rem 0;
+      }
+      nav a:hover {
+        color: var(--primary);
+      }
+      nav a::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 0;
+        height: 2px;
+        background: var(--primary);
+        transition: width 0.3s ease;
+      }
+      nav a:hover::after {
+        width: 100%;
+      }
+      .logout {
+        background: var(--primary);
+        color: white;
+        padding: 0.4rem 0.8rem;
+        border-radius: var(--radius);
+        transition: background 0.3s ease, transform 0.2s ease;
+      }
+      .logout:hover {
+        background: #008a91;
+        transform: translateY(-2px);
+      }
+      .settings-toggle button {
+        background: none;
+        border: none;
+        font-size: 1.3rem;
+        color: var(--text);
+        cursor: pointer;
+        transition: transform 0.3s ease;
+      }
+      .settings-toggle button:hover {
+        transform: rotate(180deg);
+      }
+      .settings-panel {
+        position: fixed;
+        top: 70px;
+        right: 20px;
+        background: var(--primary-light);
+        padding: 1rem;
+        border-radius: var(--radius);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        display: none;
+        flex-direction: column;
+        gap: 0.8rem;
+        z-index: 20;
+        min-width: 200px;
+      }
+      .settings-panel label {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+      }
+      .settings-panel input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+      }
+      .settings-panel.active {
+        display: flex;
+      }
+      main {
+        padding: 2rem;
+        max-width: 1200px;
+        margin: auto;
+      }
+      h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 1.2rem;
+        color: var(--primary);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .top-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 1.5rem;
+        gap: 1rem;
+      }
+
+      .button-group {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+
+      .assign-controls {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      #calendar {
+        background: white;
+        padding: 1.5rem;
+        border-radius: var(--radius);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        min-height: 700px;
+        margin-bottom: 2rem;
+      }
+
+      body.dark #calendar {
+        background: #1e1e2f;
+      }
+
+      .weekly-hours {
+        background: var(--primary-light);
+        padding: 1.5rem 2rem;
+        border-radius: var(--radius);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+      }
+
+      .hours-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 1rem;
+      }
+
+      .hours-header > div:first-child {
+        flex: 1;
+      }
+
+      .hours-header > div:last-child {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.5rem;
+      }
+
+      .hours-total {
+        font-weight: 600;
+        color: var(--gray);
+      }
+
+      #hoursPeriod {
+        font-size: 0.95rem;
+        color: var(--gray);
+        margin-top: 0.25rem;
+      }
+
+      .hours-header h2 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin: 0;
+      }
+
+      .hours-count {
+        font-weight: 600;
+        color: var(--gray);
+        font-size: 0.95rem;
+      }
+
+      .hours-search {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: var(--background);
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius);
+        border: 1px solid #e5e7eb;
+        min-width: 250px;
+      }
+
+      .hours-search i {
+        color: var(--gray);
+      }
+
+      .hours-search input {
+        border: none;
+        background: transparent;
+        width: 100%;
+        font-size: 0.95rem;
+        color: var(--text);
+      }
+
+      .hours-search input:focus {
+        outline: none;
+      }
+
+      #weeklyHoursList {
+        list-style: none;
+        padding-left: 0;
+        margin: 0;
+      }
+
+      #weeklyHoursList li {
+        padding: 0.8rem 1.2rem;
+        background-color: var(--background);
+        margin-bottom: 0.6rem;
+        border-radius: var(--radius);
+        font-weight: 500;
+        color: var(--text);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      body.dark #weeklyHoursList li {
+        background-color: #1e1e2f;
+        color: #f3f4f6;
+        border: 1px solid #3f3f5a;
+      }
+
+      .swap-section {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-top: 1.5rem;
+      }
+
+      .swap-box {
+        background: var(--primary-light);
+        padding: 1rem;
+        border-radius: var(--radius);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        min-height: 120px;
+        width: 100%;
+      }
+
+      .swap-box ul {
+        list-style: none;
+        padding: 0;
+        margin-top: 0.5rem;
+      }
+
+      .swap-box li {
+        background: var(--background);
+        padding: 0.5rem 0.7rem;
+        margin-bottom: 0.4rem;
+        border-radius: var(--radius);
+        font-size: 0.9rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .swap-box .button {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.8rem;
+      }
+
+      .swap-box:has(li:only-child) {
+        min-height: auto;
+      }
+
+      .button {
+        background: var(--primary);
+        color: white;
+        padding: 0.6rem 1.2rem;
+        border: none;
+        border-radius: var(--radius);
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .button:hover {
+        background: #007b80;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      }
+      .button i {
+        font-size: 0.9em;
+      }
+
+      .ball-decoration {
+        position: absolute;
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle at 30% 30%,
+          var(--primary),
+          var(--gray)
+        );
+        opacity: 0.15;
+        z-index: -1;
+        animation: float 8s ease-in-out infinite;
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0) rotate(0deg);
+        }
+        50% {
+          transform: translateY(-20px) rotate(5deg);
+        }
+      }
+
+      .success-message {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: #4caf50;
+        color: white;
+        padding: 1rem 2rem;
+        border-radius: var(--radius);
+        z-index: 1000;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        animation: fadeInOut 3s ease-in-out forwards;
+      }
+
+      .error-message {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: #dc2626;
+        color: white;
+        padding: 1rem 2rem;
+        border-radius: var(--radius);
+        z-index: 1000;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        animation: fadeInOut 3s ease-in-out forwards;
+      }
+
+      @keyframes fadeInOut {
+        0% {
+          opacity: 0;
+          top: 0;
+        }
+        10% {
+          opacity: 1;
+          top: 20px;
+        }
+        90% {
+          opacity: 1;
+          top: 20px;
+        }
+        100% {
+          opacity: 0;
+          top: 0;
+        }
+      }
+
+      .no-hours {
+        text-align: center;
+        padding: 2rem;
+        color: var(--gray);
+      }
+
+      .no-hours i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        color: #d1d5db;
+      }
+
+      .close-popup {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        color: var(--gray);
+        cursor: pointer;
+        transition: color 0.2s;
+      }
+
+      .close-popup:hover {
+        color: var(--primary);
+      }
+
+      .visible-rows-count {
+        font-weight: normal;
+        color: var(--gray);
+        font-size: 0.9em;
+      }
+
+      .keyboard-shortcuts {
+        background: var(--primary-light);
+        padding: 1.5rem;
+        border-radius: var(--radius);
+        margin-top: 2rem;
+      }
+
+      .keyboard-shortcuts h3 {
+        margin-bottom: 1rem;
+        font-size: 1.2rem;
+        color: var(--primary);
+      }
+
+      .keyboard-shortcuts ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+      }
+
+      .keyboard-shortcuts li {
+        padding: 0.8rem;
+        background: var(--background);
+        border-radius: var(--radius);
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+      }
+
+      .keyboard-shortcuts kbd {
+        background: var(--primary-light);
+        padding: 0.3rem 0.6rem;
+        border-radius: 4px;
+        font-family: monospace;
+        font-weight: bold;
+      }
+
+      .template-modal input[type="text"],
+      .template-modal select,
+      .template-modal input[type="time"] {
+        width: 100%;
+        padding: 0.6rem;
+        margin-bottom: 1rem;
+        border-radius: var(--radius);
+        border: 1px solid #e5e7eb;
+        background: var(--background);
+        color: var(--text);
+      }
+
+      .template-modal label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+      }
+
+      .shift-row {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.5rem;
+      }
+
+      .shift-time {
+        flex: 1;
+      }
+
+      .shift-type {
+        flex: 1;
+      }
+
+      .button.small {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.8rem;
+      }
+
+      .button.delete {
+        background: #dc2626;
+      }
+
+      /* Modal styles */
+      .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+      }
+
+      .modal-backdrop.active {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .modal-content {
+        background: var(--background);
+        padding: 2rem;
+        border-radius: var(--radius);
+        width: 90%;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        position: relative;
+        transform: translateY(-20px);
+        transition: transform 0.3s ease;
+      }
+
+      .modal-backdrop.active .modal-content {
+        transform: translateY(0);
+      }
+
+      .button.whatsapp {
+        background-color: #25d366;
+      }
+      .button.whatsapp:hover {
+        background-color: #128c7e;
+      }
+
+      .fc-daygrid-day .sent-dot,
+      .fc-col-header-cell .sent-dot {
+        width: 8px;
+        height: 8px;
+        background: #22c55e;
+        border-radius: 50%;
+        margin-top: 2px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+      }
+
+      .fc-daygrid-day .sent-dot:hover,
+      .fc-col-header-cell .sent-dot:hover {
+        transform: scale(1.4);
+        box-shadow: 0 0 6px #22c55e;
+      }
+
+      .fc-daygrid-day .sent-dot.selected,
+      .fc-col-header-cell .sent-dot.selected {
+        transform: scale(1.6);
+        box-shadow:
+          0 0 10px #22c55e,
+          0 0 20px rgba(34, 197, 94, 0.4);
+        outline: 2px solid #22c55e;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Ball Decorations -->
+    <div id="ballContainer">
+      <div class="ball-decoration" style="top: 10%; left: 5%"></div>
+      <div
+        class="ball-decoration"
+        style="top: 60%; right: 8%; width: 80px; height: 80px"
+      ></div>
+      <div
+        class="ball-decoration"
+        style="bottom: 15%; left: 15%; width: 60px; height: 60px"
+      ></div>
+      <div
+        class="ball-decoration"
+        style="bottom: 5%; right: 20%; width: 120px; height: 120px"
+      ></div>
+      <div
+        class="ball-decoration"
+        style="top: 30%; left: 40%; width: 70px; height: 70px"
+      ></div>
+      <div
+        class="ball-decoration"
+        style="top: 10%; right: 10%; width: 90px; height: 90px"
+      ></div>
+      <div
+        class="ball-decoration"
+        style="bottom: 20%; left: 30%; width: 110px; height: 110px"
+      ></div>
+      <div
+        class="ball-decoration"
+        style="bottom: 10%; right: 5%; width: 50px; height: 50px"
+      ></div>
+      <div
+        class="ball-decoration"
+        style="top: 50%; left: 10%; width: 110px; height: 110px"
+      ></div>
+    </div>
+
+    <header>
+      <div class="logo" onclick="location.href='index.html'">
+        <img src="images/plane_blue_nobg.png" alt="CrewPilot Logo" />
+      </div>
+      <nav>
+        <a onclick="logout()" class="logout"
+          ><i class="fas fa-sign-out-alt"></i> Logout</a
+        >
+        <a href="schedule.html" style="color: var(--primary)"
+          ><i class="fas fa-calendar-alt"></i> Schedule
+          <span id="notifBadge" style="display: none"></span></a
+        >
+        <a href="team.html"><i class="fas fa-users"></i> Team</a>
+        <div class="settings-toggle">
+          <button onclick="toggleSettings()">
+            <i class="fas fa-cog"></i>
+          </button>
+        </div>
+      </nav>
+    </header>
+
+    <div class="settings-panel" id="settingsPanel">
+      <label
+        ><input type="checkbox" id="darkModeToggle" onchange="toggleTheme()" />
+        Dark Mode</label
+      >
+      <label>
+        <input type="checkbox" id="ballsToggle" onchange="toggleBalls()" />
+        Floating Balls
+      </label>
+      <label>
+        <input
+          type="checkbox"
+          id="sentDotsToggle"
+          onchange="toggleSentDots()"
+        />
+        Sent Day Indicators
+      </label>
+    </div>
+
+    <main>
+      <!-- Page Title -->
+      <h1><i class="fas fa-calendar-alt"></i> Schedule</h1>
+      <p style="margin-bottom: 1.5rem; color: var(--gray)">
+        Plan, assign, and track employee shifts
+      </p>
+
+      <!-- Top Controls -->
+      <div class="top-controls">
+        <div class="button-group">
+          <button class="button owner-only" onclick="showModal('templateManagerModal')">
+            <i class="fas fa-copy"></i> Template Manager
+          </button>
+          <button class="button owner-only" onclick="generateSchedule()">
+            <i class="fas fa-magic"></i> Generate Schedule
+          </button>
+          <button
+            class="button whatsapp schedule-share-btn"
+            onclick="sendScheduleToWhatsApp()"
+          >
+            <i class="fab fa-whatsapp"></i> Share via WhatsApp
+          </button>
+          <button
+            class="button whatsapp schedule-share-btn"
+            onclick="sendImageScheduleToWhatsApp()"
+          >
+            <i class="fas fa-file-image"></i> Send as Image
+          </button>
+        </div>
+        <div class="assign-controls">
+          <button class="button view-only" onclick="void offerSelectedShift()">
+            <i class="fas fa-exchange-alt"></i> Offer Selected Shift
+          </button>
+        </div>
+      </div>
+      <!-- Calendar Section -->
+      <div id="calendar"></div>
+
+      <!-- Weekly Hours Section -->
+      <div class="weekly-hours">
+        <div class="hours-header">
+          <div>
+            <h2 id="hoursTitle">Weekly Hours</h2>
+            <div id="hoursPeriod"></div>
+          </div>
+          <div>
+            <div class="hours-total" id="hoursTotal">Total: 0 hours</div>
+            <div class="hours-count" id="hoursCount">Showing 0 employees</div>
+            <div class="hours-search">
+              <i class="fas fa-search"></i>
+              <input
+                type="text"
+                id="hoursSearchInput"
+                placeholder="Search by name..."
+                oninput="filterHoursList()"
+              />
+            </div>
+          </div>
+        </div>
+        <ul id="weeklyHoursList"></ul>
+        <div id="noHoursMessage" class="no-hours" style="display: none">
+          <i class="fas fa-users-slash"></i>
+          <h3>No Hours Recorded</h3>
+          <p>Assign shifts to see employee hours</p>
+        </div>
+      </div>
+
+      <div class="swap-section">
+        <div class="swap-box" id="swapPoolBox">
+          <div class="hours-header">
+            <div>
+              <h2>Shift Pool</h2>
+              <div>Pool listings expire 48h after posting if still open</div>
+            </div>
+          </div>
+          <ul id="swapPoolList"></ul>
+        </div>
+
+        <div class="swap-box" id="swapRequestsBox">
+          <div class="hours-header">
+            <div>
+              <h2>Swap Requests</h2>
+              <div>Pending direct swaps — recipients can accept or decline</div>
+            </div>
+          </div>
+          <ul id="swapRequestsList"></ul>
+        </div>
+      </div>
+
+      <!-- Keyboard Shortcuts Section -->
+      <div class="keyboard-shortcuts">
+        <h3><i class="fas fa-keyboard"></i> Keyboard Shortcuts</h3>
+        <div
+          id="scheduleExportHint"
+          class="schedule-share-btn"
+          style="margin-bottom: 1rem; color: var(--gray); line-height: 1.5"
+        ></div>
+        <ul>
+          <li><kbd>Click</kbd> Select a shift</li>
+          <li><kbd>Click + Drag</kbd> Select multiple shifts</li>
+          <li><kbd>Delete</kbd> Remove selected shift</li>
+          <li><kbd>D</kbd> Duplicate selected shift</li>
+          <li><kbd>R</kbd> Reassign selected shift</li>
+          <li><kbd>H</kbd> Toggle sent-day highlight for selected days</li>
+          <li><kbd>A</kbd> Assign shift to selected day</li>
+        </ul>
+      </div>
+    </main>
+
+    <!-- Template Manager Modal -->
+    <div class="modal-backdrop" id="templateManagerModal">
+      <div class="modal-content template-modal">
+        <button class="close-popup" onclick="hideModal('templateManagerModal')">
+          <i class="fas fa-times"></i>
+        </button>
+        <h2><i class="fas fa-copy"></i> Template Manager</h2>
+
+        <div style="margin-bottom: 1.5rem">
+          <h3><i class="fas fa-list"></i> Saved Templates</h3>
+          <select id="templateSelect" class="select">
+            <option value="">Select a template</option>
+          </select>
+        </div>
+
+        <div class="button-group">
+          <button class="button" onclick="loadTemplate()">
+            <i class="fas fa-upload"></i> Load Template
+          </button>
+          <button class="button" onclick="openEditTemplateModal()">
+            <i class="fas fa-edit"></i> Edit Template
+          </button>
+          <button class="button delete" onclick="deleteTemplate()">
+            <i class="fas fa-trash"></i> Delete Template
+          </button>
+        </div>
+
+        <div style="text-align: center; margin: 1.5rem 0">
+          <button class="button" onclick="showModal('createTemplateModal')">
+            <i class="fas fa-plus"></i> Create New Template
+          </button>
+        </div>
+
+        <button
+          class="button"
+          onclick="hideModal('templateManagerModal')"
+          style="width: 100%; background: #6b7280"
+        >
+          <i class="fas fa-times"></i> Close
+        </button>
+      </div>
+    </div>
+
+    <!-- Create Template Modal -->
+    <div class="modal-backdrop" id="createTemplateModal">
+      <div class="modal-content template-modal">
+        <button class="close-popup" onclick="hideModal('createTemplateModal')">
+          <i class="fas fa-times"></i>
+        </button>
+        <h2><i class="fas fa-plus"></i> Create New Template</h2>
+
+        <div style="margin-bottom: 1.5rem">
+          <div class="form-group">
+            <label for="templateName">Template Name</label>
+            <input
+              type="text"
+              id="templateName"
+              placeholder="Enter template name"
+            />
+          </div>
+
+          <div id="createTemplateContent" style="margin-top: 1.5rem"></div>
+        </div>
+
+        <div class="button-group">
+          <button class="button" onclick="saveTemplate()">
+            <i class="fas fa-save"></i> Save Template
+          </button>
+          <button
+            class="button"
+            onclick="hideModal('createTemplateModal')"
+            style="background: #6b7280"
+          >
+            <i class="fas fa-times"></i> Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Template Modal -->
+    <div class="modal-backdrop" id="editTemplateModal">
+      <div class="modal-content template-modal">
+        <button class="close-popup" onclick="hideModal('editTemplateModal')">
+          <i class="fas fa-times"></i>
+        </button>
+        <h2 id="editTemplateTitle">
+          <i class="fas fa-edit"></i> Edit Template
+        </h2>
+
+        <div id="editTemplateContent" style="margin-bottom: 1.5rem"></div>
+
+        <div class="button-group">
+          <button class="button" onclick="saveTemplateChanges()">
+            <i class="fas fa-save"></i> Save Changes
+          </button>
+          <button
+            class="button"
+            onclick="hideModal('editTemplateModal')"
+            style="background: #6b7280"
+          >
+            <i class="fas fa-times"></i> Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Schedule Image -->
+    <div
+      id="scheduleImagePreview"
+      style="display: none; padding: 1rem; font-family: 'Arial'"
+    >
+      <table
+        style="border-collapse: collapse; width: 100%; font-size: 14px"
+        border="1"
+      >
+        <thead>
+          <tr style="background: #e2e8f0">
+            <th style="padding: 8px">DATE</th>
+            <th style="padding: 8px">SHIFT</th>
+            <th style="padding: 8px">STAFF</th>
+          </tr>
+        </thead>
+        <tbody id="scheduleTableBody"></tbody>
+      </table>
+    </div>
+
+    <div
+      id="imagePagesContainer"
+      style="display: none; font-family: 'Arial'; font-size: 14px"
+    ></div>
+
+    <script>
+      let calendar;
+      let selectedEvents = [];
+      let selectedDays = new Set();
+      let selectedDates = [];
+
+      function getDefaultScheduleRange() {
+        const now = new Date();
+        const start = new Date(now);
+        const dow = start.getDay();
+        start.setDate(start.getDate() - dow + 7);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 14);
+        return { start, end };
+      }
+
+      function isSameDay(d1, d2) {
+        return d1.toDateString() === d2.toDateString();
+      }
+
+      function getSelectedRangeFromDates() {
+        if (!selectedDates.length) return null;
+        const sorted = [...selectedDates].sort((a, b) => a - b);
+        return {
+          start: new Date(sorted[0]),
+          end: new Date(sorted[sorted.length - 1].getTime() + 86400000),
+        };
+      }
+
+      function getActiveScheduleRange() {
+        return getSelectedRangeFromDates() || getDefaultScheduleRange();
+      }
+
+      function getEventsForScheduleExport() {
+        const range = getActiveScheduleRange();
+        return getAllEvents().filter((e) =>
+          selectedDates.length
+            ? selectedDates.some((d) => isSameDay(d, e.start))
+            : e.start >= range.start && e.start < range.end
+        );
+      }
+
+      async function markDatesAsSentFromEvents(events) {
+        const uid = resolveUserEmployeeId();
+        const keys = [
+          ...new Set(events.map((e) => new Date(e.start).toDateString())),
+        ];
+        for (const key of keys) {
+          if (sentDateKeySet.has(key)) continue;
+          const iso = new Date(key).toISOString().slice(0, 10);
+          try {
+            const res = await fetch(`${API_BASE}/sent-days`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ date: iso, sent_by: uid }),
+            });
+            if (!res.ok) throw new Error(await res.text());
+            sentDateKeySet.add(key);
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      }
+
+      function highlightSelectedDays() {
+        selectedDays.clear();
+        selectedDates.forEach((d) => selectedDays.add(d.toDateString()));
+
+        calendar.getEvents().forEach((event) => {
+          const isSelected = selectedDays.has(event.start.toDateString());
+          event.setProp("borderColor", isSelected ? "#dc2626" : "");
+          event.setProp("borderWidth", isSelected ? "2px" : "");
+        });
+      }
+
+      function mountSentDayDot(mountArg) {
+        const sentDotsEnabled = localStorage.getItem("sentDotsEnabled") !== "false";
+        if (!sentDotsEnabled) return;
+
+        const el = mountArg.el;
+        const date = mountArg.date;
+        const view = mountArg.view;
+        const sent = sentDateKeysArray();
+        const dateKey = date.toDateString();
+        if (!sent.includes(dateKey)) return;
+        if (el.querySelector(".sent-dot-wrapper")) return;
+
+        el.style.position = el.style.position || "relative";
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "sent-dot-wrapper";
+        wrapper.dataset.sentDateKey = dateKey;
+        wrapper.style.cssText =
+          "position:absolute;top:2px;left:0;right:0;display:flex;justify-content:center;align-items:flex-start;cursor:pointer;padding:6px 12px 14px;z-index:6;box-sizing:border-box;";
+        if (view && view.type.startsWith("timeGrid")) {
+          wrapper.style.top = "4px";
+        }
+
+        const dot = document.createElement("div");
+        dot.className = "sent-dot schedule-sent-dot";
+        dot.setAttribute("aria-hidden", "true");
+
+        wrapper.appendChild(dot);
+        el.appendChild(wrapper);
+      }
+
+      function updateSentDotsUI() {
+        const sent = sentDateKeysArray();
+
+        document.querySelectorAll(".sent-dot-wrapper").forEach((wrapper) => {
+          const key = wrapper.dataset.sentDateKey;
+          wrapper.style.display = sent.includes(key) ? "flex" : "none";
+        });
+
+        // Ensure newly-marked dates get a dot even without full rerender.
+        document
+          .querySelectorAll(".fc-daygrid-day, .fc-col-header-cell")
+          .forEach((cell) => {
+            const ds = cell.getAttribute("data-date");
+            if (!ds) return;
+            const date = new Date(`${ds}T12:00:00`);
+            const key = date.toDateString();
+            if (sent.includes(key) && !cell.querySelector(".sent-dot-wrapper")) {
+              mountSentDayDot({
+                el: cell,
+                date,
+                view: calendar?.view,
+              });
+            }
+          });
+      }
+
+      function updateScheduleExportSummaryLabel() {
+        const el = document.getElementById("scheduleExportHint");
+        if (!el) return;
+
+        if (selectedDates.length) {
+          const sorted = [...selectedDates].sort((a, b) => a - b);
+          const first = sorted[0].toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+          });
+          const last = sorted[sorted.length - 1].toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+          });
+
+          el.innerHTML = `
+      <strong>Sharing:</strong> only the dates you selected on the calendar.
+      ${
+        selectedDates.length === 1
+          ? `Currently selected: ${first}.`
+          : `Currently selected: ${selectedDates.length} dates (${first} to ${last}).`
+      }
+      Use <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + click to add or remove individual days.
+    `;
+          return;
+        }
+
+        const { start, end } = getDefaultScheduleRange();
+        const endIncl = new Date(end.getTime() - 86400000);
+
+        el.innerHTML = `
+    <strong>Sharing:</strong> the default upcoming schedule window when no dates are selected.
+    Current default: ${start.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })} – ${endIncl.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })}.
+    Select specific dates on the calendar if you want to send a custom range instead.
+  `;
+      }
+      function safeParse(key, fallback = []) {
+        try {
+          return JSON.parse(localStorage.getItem(key)) || fallback;
+        } catch {
+          return fallback;
+        }
+      }
+      function generateId() {
+        return crypto.randomUUID();
+      }
+      const AppState = {
+        employees: [],
+        events: [],
+        swapPool: [],
+        swapRequests: [],
+        user: null,
+      };
+
+      const API_BASE = "http://localhost:3000";
+      let persistShiftsTimer = null;
+      const sentDateKeySet = new Set();
+      let tempShiftIdSeq = -1;
+      function nextTempShiftId() {
+        return tempShiftIdSeq--;
+      }
+      function sentDateKeysArray() {
+        return [...sentDateKeySet];
+      }
+      function normalizeUserRole(role) {
+        const normalized = String(role || "").toLowerCase();
+        if (normalized === "owner" || normalized === "manager") return normalized;
+        return "employee";
+      }
+      function normalizeUser(userObj) {
+        if (!userObj || typeof userObj !== "object") return null;
+        return { ...userObj, role: normalizeUserRole(userObj.role) };
+      }
+      function initializeState() {
+        const latestLoggedIn = normalizeUser(safeParse("loggedInUser", null));
+        AppState.employees = [];
+        AppState.events = [];
+        AppState.swapPool = [];
+        AppState.swapRequests = [];
+        AppState.user = latestLoggedIn;
+      }
+
+      function syncUserPreferenceState() {
+        if (AppState.user) {
+          localStorage.setItem("loggedInUser", JSON.stringify(AppState.user));
+        }
+      }
+
+      function serializeShiftsPayload() {
+        return getAllEvents().map((e) => {
+          const row = {
+            employeeId: e.employeeId,
+            employee_id: e.employeeId,
+            shiftType: e.shiftType,
+            type: e.shiftType,
+            start: e.start instanceof Date ? e.start.toISOString() : e.start,
+            end: e.end instanceof Date ? e.end.toISOString() : e.end,
+          };
+          const sid = Number(e.id);
+          if (Number.isFinite(sid) && sid > 0) {
+            row.id = sid;
+          }
+          return row;
+        });
+      }
+
+      async function loadShiftsFromServer() {
+        try {
+          const res = await fetch(`${API_BASE}/shifts`);
+          if (!res.ok) {
+            throw new Error(await res.text());
+          }
+          const rows = await res.json();
+          AppState.events = (Array.isArray(rows) ? rows : []).map((ev) =>
+            normalizeStateEvent({
+              id: ev.id,
+              employeeId: ev.employee_id ?? ev.employeeId,
+              shiftType: ev.type || ev.shiftType || "Open",
+              start: ev.start,
+              end: ev.end,
+            })
+          );
+        } catch (e) {
+          console.error(e);
+          showErrorMessage("Failed to load shifts from server");
+          AppState.events = [];
+        }
+      }
+
+      async function persistShiftsToServer() {
+        const res = await fetch(`${API_BASE}/shifts`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(serializeShiftsPayload()),
+        });
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+        await loadShiftsFromServer();
+        renderCalendarFromState();
+      }
+
+      function queuePersistShifts() {
+        clearTimeout(persistShiftsTimer);
+        persistShiftsTimer = setTimeout(() => {
+          persistShiftsToServer().catch((err) => {
+            console.error(err);
+            showErrorMessage("Failed to save shifts");
+          });
+        }, 400);
+      }
+
+      function perform(action) {
+        try {
+          action();
+          syncUserPreferenceState();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      initializeState();
+
+      function migrateSwapPoolShape() {
+        if (!Array.isArray(AppState.swapPool)) return;
+        let changed = false;
+        AppState.swapPool = AppState.swapPool
+          .map((e) => {
+            if (!e || !e.shiftId) return null;
+            if (!e.id) {
+              e.id = generateId();
+              changed = true;
+            }
+            if (e.originalOwner == null && e.originalEmployee != null) {
+              e.originalOwner = e.originalEmployee;
+              changed = true;
+            }
+            if (!e.originalOwner) e.originalOwner = "";
+            if (e.currentHolder == null) {
+              e.currentHolder = e.originalOwner;
+              changed = true;
+            }
+            if (!e.status) {
+              e.status = "posted";
+              changed = true;
+            }
+            if (e.claimedBy === undefined) {
+              e.claimedBy = null;
+              changed = true;
+            }
+            const basePosted = e.postedAt ? new Date(e.postedAt) : new Date();
+            if (!e.postedAt) {
+              e.postedAt = basePosted.toISOString();
+              changed = true;
+            }
+            if (!e.expiresAt) {
+              e.expiresAt = new Date(
+                basePosted.getTime() + 48 * 60 * 60 * 1000
+              ).toISOString();
+              changed = true;
+            }
+            if (!e.shiftType) e.shiftType = "Open";
+            return e;
+          })
+          .filter(Boolean);
+      }
+      migrateSwapPoolShape();
+
+      const CONFIG = {
+        MAX_SHIFTS_PER_DAY: 1,
+        SHIFT_DURATION: 5,
+        ATTEMPTS: 120,
+      };
+      const employees = AppState.employees;
+      let hasUnsavedChanges = false;
+      let currentViewHoursData = [];
+      let visibleHoursCount = 0;
+      let user = AppState.user;
+
+      function getEmployeeNameById(id) {
+        const n = Number(id);
+        if (!Number.isFinite(n) || n <= 0) return "";
+        const emp = employees.find((e) => Number(e.id) === n);
+        return emp ? emp.name : "";
+      }
+
+      function getEmployeeIdByName(name) {
+        if (!name) return null;
+        const emp = employees.find(
+          (e) => e.name && e.name.toLowerCase() === String(name).toLowerCase()
+        );
+        return emp ? Number(emp.id) : null;
+      }
+
+      function resolveUserEmployeeId() {
+        if (user && user.id != null && Number.isFinite(Number(user.id))) {
+          return Number(user.id);
+        }
+        return getEmployeeIdByName(user && user.name);
+      }
+
+      async function hydrateEmployeesFromApi() {
+        try {
+          const res = await fetch(`${API_BASE}/employees`);
+          if (!res.ok) throw new Error(await res.text());
+          const arr = await res.json();
+          const list = (Array.isArray(arr) ? arr : []).map((emp) => ({
+            ...emp,
+            id: Number(emp.id),
+            isKeyholder:
+              emp.isKeyholder === true || emp.role === "Key Holder",
+            availability:
+              emp.availability &&
+              typeof emp.availability === "object" &&
+              !Array.isArray(emp.availability)
+                ? emp.availability
+                : {},
+          }));
+          const target = AppState.employees;
+          target.length = 0;
+          list.forEach((e) => target.push(e));
+          syncUserPreferenceState();
+        } catch (e) {
+          console.error(e);
+          showErrorMessage("Failed to load employees from server");
+        }
+      }
+
+      function getEmployeeIdFromCalendarEvent(event) {
+        const raw = event.extendedProps || {};
+        const id = raw.employeeId ?? raw.employee_id;
+        if (id == null || id === "") return null;
+        const n = Number(id);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      }
+
+      function getEmployeeFromEvent(event) {
+        const id = getEmployeeIdFromCalendarEvent(event);
+        if (id != null) return getEmployeeNameById(id);
+        if (event.employee) return event.employee;
+        if (event.extendedProps?.employee) return event.extendedProps.employee;
+        return "";
+      }
+
+      function getShiftTypeFromEvent(event) {
+        if (event.shiftType) return event.shiftType;
+        if (event.extendedProps?.shiftType) return event.extendedProps.shiftType;
+        if (event.extendedProps?.type) return event.extendedProps.type;
+        return "Open";
+      }
+
+      function getEmployeeByName(name) {
+        return employees.find((emp) => emp.name === name);
+      }
+
+      async function loadSentDaysFromServer() {
+        try {
+          const res = await fetch(`${API_BASE}/sent-days`);
+          if (!res.ok) throw new Error(await res.text());
+          const dates = await res.json();
+          sentDateKeySet.clear();
+          (Array.isArray(dates) ? dates : []).forEach((iso) => {
+            const d = new Date(`${String(iso).slice(0, 10)}T12:00:00`);
+            sentDateKeySet.add(d.toDateString());
+          });
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      async function loadShiftPoolFromServer() {
+        try {
+          const res = await fetch(`${API_BASE}/shift-pool`);
+          if (!res.ok) throw new Error(await res.text());
+          const rows = await res.json();
+          AppState.swapPool = (Array.isArray(rows) ? rows : []).map((r) => {
+            const posterName = getEmployeeNameById(r.created_by);
+            const start = new Date(r.shift_start);
+            return {
+              id: r.id,
+              shiftId: Number(r.shift_id),
+              originalOwner: posterName,
+              originalEmployee: posterName,
+              currentHolder: posterName,
+              shiftStart: start,
+              shiftEnd: new Date(r.shift_end),
+              shiftType: r.shift_type || "Open",
+              postedAt: start.toISOString(),
+              expiresAt: new Date(
+                start.getTime() + 48 * 60 * 60 * 1000
+              ).toISOString(),
+              status: r.status || "posted",
+              claimedBy: r.requested_by
+                ? getEmployeeNameById(r.requested_by)
+                : null,
+            };
+          });
+        } catch (e) {
+          console.error(e);
+          AppState.swapPool = [];
+        }
+      }
+
+      async function loadSwapRequestsFromServer() {
+        try {
+          const res = await fetch(`${API_BASE}/swap-requests`);
+          if (!res.ok) throw new Error(await res.text());
+          const rows = await res.json();
+          AppState.swapRequests = (Array.isArray(rows) ? rows : []).map((r) => ({
+            id: r.id,
+            shiftId: Number(r.shift_id),
+            fromEmployee: getEmployeeNameById(r.from_employee_id) || "",
+            toEmployee: getEmployeeNameById(r.to_employee_id) || "",
+            status: r.status,
+            createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+          }));
+        } catch (e) {
+          console.error(e);
+          AppState.swapRequests = [];
+        }
+      }
+
+      function getEligibleEmployees(empList, requireKeyholder) {
+        const isKeyholder = (emp) =>
+          emp.isKeyholder === true || emp.role === "Key Holder";
+        let candidates = empList.filter((emp) => {
+          if (requireKeyholder) return isKeyholder(emp);
+          return true;
+        });
+        if (requireKeyholder && candidates.length === 0) {
+          candidates = empList.slice();
+        }
+        return candidates;
+      }
+
+      function getDayAvailability(emp, dayName) {
+        const availability = emp?.availability;
+        if (!availability || typeof availability !== "object") return null;
+        return Array.isArray(availability[dayName]) ? availability[dayName] : [];
+      }
+
+      function isEmployeeAvailableForShift(emp, currentDate, startTime, endTime) {
+        const dayName = currentDate
+          .toLocaleDateString("en-US", { weekday: "long" })
+          .toLowerCase();
+        const dayAvailability = getDayAvailability(emp, dayName);
+        if (!dayAvailability || dayAvailability.length === 0) return true;
+
+        return dayAvailability.some((slot) => {
+          const start = new Date(currentDate);
+          const end = new Date(currentDate);
+          const [sh, sm] = slot.start.split(":").map(Number);
+          const [eh, em] = slot.end.split(":").map(Number);
+          start.setHours(sh, sm, 0, 0);
+          end.setHours(eh, em, 0, 0);
+          return startTime >= start && endTime <= end;
+        });
+      }
+
+      /**
+       * Shift pool entry (AppState.swapPool[]):
+       * { id, shiftId, originalOwner, currentHolder, shiftStart, shiftEnd, shiftType,
+       *   status: "posted"|"claimed"|"approved"(removed) | rejected handled inline,
+       *   claimedBy, postedAt, expiresAt }
+       * Flow: posted → claimed → owner approves (calendar → currentHolder) & row removed,
+       *       or reject posted (remove), reject claim (back to posted), poster/claimer cancel.
+       */
+      function pruneSwapPool() {
+        const now = new Date();
+        AppState.swapPool = AppState.swapPool.filter((entry) => {
+          if (!entry || !entry.shiftId) return false;
+          if (entry.expiresAt && now > new Date(entry.expiresAt)) return false;
+          return true;
+        });
+      }
+
+      function findPoolEntry(poolIdOrShiftId) {
+        const needle = Number(poolIdOrShiftId);
+        const str = String(poolIdOrShiftId);
+        return AppState.swapPool.find(
+          (e) =>
+            e.id === poolIdOrShiftId ||
+            Number(e.shiftId) === needle ||
+            String(e.shiftId) === str
+        );
+      }
+
+      function isShiftActiveInPool(shiftId) {
+        const sid = Number(shiftId);
+        return AppState.swapPool.some(
+          (s) =>
+            Number(s.shiftId) === sid &&
+            (s.status === "posted" || s.status === "claimed")
+        );
+      }
+
+      function renderSwapPool() {
+        AppState.user = normalizeUser(safeParse("loggedInUser", null)) || AppState.user;
+        user = AppState.user || user;
+        pruneSwapPool();
+        const list = document.getElementById("swapPoolList");
+        if (!list) return;
+        list.innerHTML = "";
+        const visible = AppState.swapPool.filter(
+          (e) => e.status === "posted" || e.status === "claimed"
+        );
+        if (visible.length === 0) {
+          list.innerHTML = "<li style='opacity:0.6'>No shifts available</li>";
+          return;
+        }
+        const role = normalizeUserRole(user.role);
+        const isMod = role === "owner" || role === "manager";
+        const isEmployee = role === "employee";
+        const me = user.name;
+
+        visible
+          .slice()
+          .sort((a, b) => new Date(a.shiftStart) - new Date(b.shiftStart))
+          .forEach((entry) => {
+            const li = document.createElement("li");
+            const start = new Date(entry.shiftStart);
+            const end = new Date(entry.shiftEnd);
+            const date = start.toLocaleDateString("en-US", {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+            });
+            const time = `${start.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}-${end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+            const ownerLabel = entry.originalOwner || entry.originalEmployee || "?";
+            const statusNote =
+              entry.status === "claimed"
+                ? ` · Claimed by ${entry.claimedBy} (pending approval)`
+                : "";
+
+            const span = document.createElement("span");
+            span.textContent = `${date} ${time} (${entry.shiftType || "Open"}) — ${ownerLabel}${statusNote}`;
+
+            const actions = document.createElement("div");
+            actions.style.cssText =
+              "display:flex;gap:0.35rem;flex-wrap:wrap;align-items:center;";
+
+            const mkBtn = (label, cls, onClick) => {
+              const b = document.createElement("button");
+              b.className = cls || "button view-only small";
+              b.textContent = label;
+              b.onclick = onClick;
+              return b;
+            };
+
+            const pid = entry.id;
+            const isPoster =
+              entry.originalOwner === me || entry.originalEmployee === me;
+
+            if (isPoster) {
+              actions.appendChild(
+                mkBtn(
+                  entry.status === "claimed" ? "Cancel Pool Offer" : "Cancel",
+                  "button view-only small",
+                  () => cancelPoolOffer(pid)
+                )
+              );
+
+              if (entry.status === "claimed") {
+                const w = document.createElement("span");
+                w.style.cssText = "font-size:0.8rem;opacity:0.85;";
+                w.textContent = "Waiting for approval";
+                actions.appendChild(w);
+              }
+            }
+
+            if (isMod) {
+              if (entry.status === "posted") {
+                const rej = mkBtn("Reject", "button view-only small", () =>
+                  ownerRejectPoolPosted(pid)
+                );
+                rej.style.background = "#6b7280";
+                actions.appendChild(rej);
+              } else if (entry.status === "claimed") {
+                actions.appendChild(
+                  mkBtn("Accept", "button view-only small", () =>
+                    ownerApprovePoolShift(pid)
+                  )
+                );
+                actions.appendChild(
+                  mkBtn("Reject", "button view-only small", () =>
+                    ownerRejectPoolClaim(pid)
+                  )
+                );
+              }
+            }
+
+            if (!isPoster && isEmployee && entry.status === "posted") {
+              actions.appendChild(
+                mkBtn("Take Shift", "button view-only small", () =>
+                  claimPoolShift(pid)
+                )
+              );
+            }
+            if (!isPoster && entry.status === "claimed") {
+              if (entry.claimedBy === me) {
+                actions.appendChild(
+                  mkBtn("Cancel Request", "button view-only small", () =>
+                    cancelPoolClaimByClaimer(pid)
+                  )
+                );
+              } else {
+                const u = document.createElement("span");
+                u.style.cssText = "font-size:0.8rem;opacity:0.6;";
+                u.textContent = "Unavailable";
+                actions.appendChild(u);
+              }
+            }
+
+            li.appendChild(span);
+            li.appendChild(actions);
+            list.appendChild(li);
+          });
+      }
+
+      function updateNotifications() {
+        const badge = document.getElementById("notifBadge");
+        if (!badge) return;
+        if (normalizeUserRole(user.role) === "employee") {
+          badge.textContent = "";
+          badge.style.display = "none";
+          return;
+        }
+        const count = AppState.swapRequests.filter(
+          (r) => r.status === "awaiting_approval"
+        ).length;
+        badge.textContent = count > 0 ? String(count) : "";
+        badge.style.display = count > 0 ? "inline-block" : "none";
+      }
+
+      function clearSelections() {
+        selectedEvents = [];
+        selectedDays.clear();
+        selectedDates = [];
+        updateScheduleExportSummaryLabel();
+      }
+
+      function createShiftEvent({ employeeId, shiftType, start, end }) {
+        return {
+          id: nextTempShiftId(),
+          employeeId: Number(employeeId),
+          shiftType,
+          start,
+          end,
+        };
+      }
+
+      function formatTitle(eventLike) {
+        const duration =
+          (new Date(eventLike.end) - new Date(eventLike.start)) / (1000 * 60 * 60);
+        const label =
+          getEmployeeNameById(eventLike.employeeId) ||
+          eventLike.employee ||
+          "Unknown";
+        return `${label} (${eventLike.shiftType} - ${duration.toFixed(1)}h)`;
+      }
+
+      function normalizeStateEvent(eventLike) {
+        let employeeId = Number(
+          eventLike.employeeId ?? eventLike.employee_id ?? NaN
+        );
+        if (!Number.isFinite(employeeId) || employeeId <= 0) {
+          const legacyName =
+            eventLike.employee || eventLike.extendedProps?.employee || "";
+          employeeId = getEmployeeIdByName(legacyName) || 0;
+        }
+        let sid = Number(eventLike.id);
+        if (
+          eventLike.id === undefined ||
+          eventLike.id === null ||
+          !Number.isFinite(sid)
+        ) {
+          sid = nextTempShiftId();
+        }
+        return {
+          id: sid,
+          employeeId,
+          shiftType:
+            eventLike.shiftType ||
+            eventLike.type ||
+            eventLike.extendedProps?.shiftType ||
+            "Open",
+          start: new Date(eventLike.start),
+          end: new Date(eventLike.end),
+        };
+      }
+
+      function getAllEvents() {
+        return (AppState.events || []).map(normalizeStateEvent);
+      }
+
+      function isShiftInPool(shiftId) {
+        return isShiftActiveInPool(shiftId);
+      }
+
+      function hasPendingSwapRequestForShift(shiftId) {
+        const sid = Number(shiftId);
+        return AppState.swapRequests.some(
+          (r) =>
+            Number(r.shiftId) === sid &&
+            (r.status === "pending" || r.status === "awaiting_approval")
+        );
+      }
+
+      function toCalendarEvent(eventLike) {
+        const e = normalizeStateEvent(eventLike);
+        const inPool = e.id ? isShiftInPool(e.id) : false;
+        const swapPending = e.id ? hasPendingSwapRequestForShift(e.id) : false;
+        const highlightSwap = inPool || swapPending;
+        const base = getShiftColor(e.shiftType);
+        let backgroundColor = base;
+        let borderColor = base;
+        let textColor = "#fff";
+        if (highlightSwap) {
+          backgroundColor = "#facc15";
+          borderColor = "#ca8a04";
+          textColor = "#111827";
+        }
+        return {
+          id: String(e.id),
+          title: formatTitle(e),
+          start: e.start,
+          end: e.end,
+          allDay: false,
+          backgroundColor,
+          borderColor,
+          textColor,
+          display: "block",
+          extendedProps: {
+            employeeId: e.employeeId,
+            shiftType: e.shiftType,
+            inPool,
+            swapPending,
+          },
+        };
+      }
+
+      function renderCalendarFromState() {
+        if (!calendar) return;
+        calendar.removeAllEvents();
+        getAllEvents().forEach((event) => {
+          calendar.addEvent(toCalendarEvent(event));
+        });
+      }
+
+      function canAddToPool(fcEvent) {
+        const shiftId = Number(fcEvent.id);
+        const start = new Date(fcEvent.start);
+        const now = new Date();
+        if (start <= now) {
+          return "This shift has already started or passed.";
+        }
+        if (
+          AppState.swapRequests.some(
+            (r) =>
+              Number(r.shiftId) === shiftId &&
+              (r.status === "pending" || r.status === "awaiting_approval")
+          )
+        ) {
+          return "This shift already has pending swap requests.";
+        }
+        if (isShiftActiveInPool(shiftId)) {
+          return "This shift is already in the pool.";
+        }
+        return null;
+      }
+
+      async function offerSelectedShift() {
+        if (selectedEvents.length !== 1) {
+          showErrorMessage("Select one shift to offer.");
+          return;
+        }
+        const event = selectedEvents[0];
+        const eventEmployee = getEmployeeFromEvent(event);
+        const canOverride = user.role === "owner" || user.role === "manager";
+        if (!canOverride && eventEmployee !== user.name) {
+          showErrorMessage("You can only offer your own shift.");
+          return;
+        }
+        const shiftId = Number(event.id);
+        if (!Number.isFinite(shiftId) || shiftId <= 0) {
+          showErrorMessage("Shift missing ID");
+          return;
+        }
+        const poolError = canAddToPool(event);
+        if (poolError) {
+          showErrorMessage(poolError);
+          return;
+        }
+        const createdBy =
+          resolveUserEmployeeId() || getEmployeeIdByName(eventEmployee);
+        if (createdBy == null) {
+          showErrorMessage("Could not resolve your employee id.");
+          return;
+        }
+        try {
+          const res = await fetch(`${API_BASE}/shift-pool`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              shift_id: shiftId,
+              created_by: createdBy,
+              status: "posted",
+            }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          await loadShiftPoolFromServer();
+          renderSwapPool();
+          renderCalendarFromState();
+          updateNotifications();
+          clearSelections();
+          showSuccessMessage("Shift added to swap pool.");
+        } catch (err) {
+          console.error(err);
+          showErrorMessage("Failed to add shift to pool");
+        }
+      }
+
+      function canAssign(employeeId, start, end, excludeId = null) {
+        const eid = Number(employeeId);
+        if (!Number.isFinite(eid) || eid <= 0) return false;
+        const sameDay = getAllEvents().filter(
+          (e) =>
+            Number(e.employeeId) === eid &&
+            e.start.toDateString() === start.toDateString() &&
+            Number(e.id) !== Number(excludeId)
+        );
+
+        return sameDay.length === 0;
+      }
+
+      function refreshScheduleViewsFromState() {
+        syncUserPreferenceState();
+        AppState.user = normalizeUser(safeParse("loggedInUser", null)) || AppState.user;
+        user = AppState.user || user;
+        renderCalendarFromState();
+        renderSwapPool();
+        renderSwapRequests();
+        updateNotifications();
+      }
+
+      async function claimPoolShift(poolId) {
+        const entry = findPoolEntry(poolId);
+        if (!entry) return;
+        if (entry.status !== "posted") {
+          showErrorMessage("This shift is no longer available.");
+          return;
+        }
+        const poster =
+          entry.originalOwner || entry.originalEmployee || "";
+        if (poster === user.name) {
+          showErrorMessage("You cannot claim your own posted shift.");
+          return;
+        }
+        const shiftId = Number(entry.shiftId);
+        const event = getAllEvents().find((e) => Number(e.id) === shiftId);
+        if (!event) {
+          try {
+            await fetch(`${API_BASE}/shift-pool/${entry.id}`, {
+              method: "DELETE",
+            });
+            await loadShiftPoolFromServer();
+            renderSwapPool();
+          } catch (err) {
+            console.error(err);
+          }
+          return;
+        }
+        const myEmployeeId = resolveUserEmployeeId();
+        if (myEmployeeId == null) {
+          showErrorMessage("Your account is not linked to an employee record.");
+          return;
+        }
+        if (
+          !canAssign(myEmployeeId, new Date(event.start), new Date(event.end), shiftId)
+        ) {
+          showErrorMessage("You already have a shift that day (max one per day).");
+          return;
+        }
+        try {
+          const res = await fetch(`${API_BASE}/shift-pool/${entry.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              requested_by: myEmployeeId,
+              status: "claimed",
+            }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          await loadShiftPoolFromServer();
+          refreshScheduleViewsFromState();
+          clearSelections();
+          showSuccessMessage("Request sent — waiting for manager approval.");
+        } catch (err) {
+          console.error(err);
+          showErrorMessage("Failed to claim shift");
+        }
+      }
+
+      async function cancelPoolOffer(poolId) {
+        const entry = findPoolEntry(poolId);
+        if (!entry) return;
+
+        const poster = entry.originalOwner || entry.originalEmployee || "";
+        if (poster !== user.name) {
+          showErrorMessage("Only the original poster can cancel this offer.");
+          return;
+        }
+
+        try {
+          const res = await fetch(`${API_BASE}/shift-pool/${entry.id}`, {
+            method: "DELETE",
+          });
+          if (!res.ok) throw new Error(await res.text());
+          await loadShiftPoolFromServer();
+          refreshScheduleViewsFromState();
+          showSuccessMessage("Shift removed from pool.");
+        } catch (err) {
+          console.error(err);
+          showErrorMessage("Failed to remove pool offer");
+        }
+      }
+
+      async function cancelPoolClaimByClaimer(poolId) {
+        const entry = findPoolEntry(poolId);
+        if (!entry || entry.status !== "claimed") return;
+        if (entry.claimedBy !== user.name) {
+          showErrorMessage("Only the claimer can cancel this request.");
+          return;
+        }
+        try {
+          const res = await fetch(`${API_BASE}/shift-pool/${entry.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ requested_by: null, status: "posted" }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          await loadShiftPoolFromServer();
+          refreshScheduleViewsFromState();
+          showSuccessMessage("Claim withdrawn.");
+        } catch (err) {
+          console.error(err);
+          showErrorMessage("Failed to withdraw claim");
+        }
+      }
+
+      async function ownerApprovePoolShift(poolId) {
+        const role = normalizeUserRole(user.role);
+        if (role !== "owner" && role !== "manager") return;
+        const entry = findPoolEntry(poolId);
+        if (!entry || entry.status !== "claimed" || !entry.claimedBy) return;
+        const shiftId = Number(entry.shiftId);
+        const newHolder = entry.claimedBy;
+        const newHolderId = getEmployeeIdByName(newHolder);
+        if (newHolderId == null) {
+          showErrorMessage("Could not resolve employee for reassignment.");
+          return;
+        }
+        AppState.events = getAllEvents().map((e) =>
+          Number(e.id) === shiftId ? { ...e, employeeId: newHolderId } : e
+        );
+        try {
+          await persistShiftsToServer();
+          const res = await fetch(`${API_BASE}/shift-pool/${entry.id}`, {
+            method: "DELETE",
+          });
+          if (!res.ok) throw new Error(await res.text());
+          await loadShiftPoolFromServer();
+          refreshScheduleViewsFromState();
+          clearSelections();
+          showSuccessMessage("Shift reassigned.");
+        } catch (err) {
+          console.error(err);
+          showErrorMessage("Failed to approve pool shift");
+        }
+      }
+
+      async function ownerRejectPoolPosted(poolId) {
+        const role = normalizeUserRole(user.role);
+        if (role !== "owner" && role !== "manager") return;
+        const entry = findPoolEntry(poolId);
+        if (!entry || entry.status !== "posted") return;
+        try {
+          const res = await fetch(`${API_BASE}/shift-pool/${entry.id}`, {
+            method: "DELETE",
+          });
+          if (!res.ok) throw new Error(await res.text());
+          await loadShiftPoolFromServer();
+          refreshScheduleViewsFromState();
+          showSuccessMessage("Pool offer removed.");
+        } catch (err) {
+          console.error(err);
+          showErrorMessage("Failed to remove offer");
+        }
+      }
+
+      async function ownerRejectPoolClaim(poolId) {
+        const role = normalizeUserRole(user.role);
+        if (role !== "owner" && role !== "manager") return;
+        const entry = findPoolEntry(poolId);
+        if (!entry || entry.status !== "claimed") return;
+        try {
+          const res = await fetch(`${API_BASE}/shift-pool/${entry.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ requested_by: null, status: "posted" }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          await loadShiftPoolFromServer();
+          refreshScheduleViewsFromState();
+          showSuccessMessage("Claim rejected — shift is open again.");
+        } catch (err) {
+          console.error(err);
+          showErrorMessage("Failed to reject claim");
+        }
+      }
+
+      function shouldShowOwnerShiftTip() {
+        return localStorage.getItem("hideOwnerShiftTip") !== "true";
+      }
+
+      function openShiftActionModal() {
+        if (selectedEvents.length !== 1) return;
+
+        const isEmployee = normalizeUserRole(user.role) === "employee";
+        const isManagerView = !isEmployee;
+
+        if (isManagerView && !shouldShowOwnerShiftTip()) {
+          return;
+        }
+
+        removeShiftActionModal();
+
+        const modal = document.createElement("div");
+        modal.id = "shiftActionModal";
+        modal.className = "modal-backdrop active";
+        modal.innerHTML = `
+          <div class="modal-content">
+            <button class="close-popup" onclick="removeShiftActionModal()">
+              <i class="fas fa-times"></i>
+            </button>
+
+            <h2>${isEmployee ? "Manage shift" : "Shift shortcuts"}</h2>
+
+            <p style="font-size:0.9rem; color:var(--gray); margin-bottom:0.75rem;">
+              ${
+                isEmployee
+                  ? "Offer this shift to the pool or request a direct swap."
+                  : "Use keyboard shortcuts: R = reassign, D = duplicate, Delete = remove."
+              }
+            </p>
+
+            ${
+              isManagerView
+                ? `
+            <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem; font-size:0.9rem;">
+              <input type="checkbox" id="hideOwnerShiftTipCheckbox">
+              Don’t show me this again
+            </label>
+            `
+                : ""
+            }
+
+            <div class="button-group">
+              ${
+                isEmployee
+                  ? `
+              <button class="button" onclick="void offerSelectedShift(); removeShiftActionModal();">
+                Offer to Pool
+              </button>
+              <button class="button" onclick="openDirectSwapModal()">
+                Swap with Someone
+              </button>
+              `
+                  : ""
+              }
+
+              <button class="button" style="background:#6b7280" onclick="closeShiftActionModal()">
+                Close
+              </button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+      }
+
+      function closeShiftActionModal() {
+        const cb = document.getElementById("hideOwnerShiftTipCheckbox");
+        if (cb && cb.checked) {
+          localStorage.setItem("hideOwnerShiftTip", "true");
+        }
+        removeShiftActionModal();
+      }
+
+      function removeShiftActionModal() {
+        const modal = document.getElementById("shiftActionModal");
+        if (modal) modal.remove();
+      }
+
+      function openDirectSwapModal() {
+        if (selectedEvents.length !== 1) return;
+        const event = selectedEvents[0];
+        const eventEmployee = getEmployeeFromEvent(event);
+        const selfId = getEmployeeIdFromCalendarEvent(event);
+        const availableEmployees = employees.filter(
+          (emp) => Number(emp.id) !== Number(selfId)
+        );
+        removeShiftActionModal();
+        const modal = document.createElement("div");
+        modal.id = "directSwapModal";
+        modal.className = "modal-backdrop active";
+        modal.innerHTML = `
+          <div class="modal-content">
+            <button class="close-popup" onclick="removeDirectSwapModal()">
+              <i class="fas fa-times"></i>
+            </button>
+            <h2>Swap with Someone</h2>
+            <div style="margin-bottom: 1rem;">
+              <label for="directSwapTarget">Choose employee</label>
+              <select id="directSwapTarget" class="select">
+                <option value="">Select Employee</option>
+                ${availableEmployees
+                  .map(
+                    (emp) => `<option value="${emp.id}">${emp.name}</option>`
+                  )
+                  .join("")}
+              </select>
+            </div>
+            <div class="button-group">
+              <button class="button" onclick="submitDirectSwapRequest()">Send Request</button>
+              <button class="button" style="background:#6b7280" onclick="removeDirectSwapModal()">Cancel</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+      }
+
+      function removeDirectSwapModal() {
+        const modal = document.getElementById("directSwapModal");
+        if (modal) modal.remove();
+      }
+
+      async function requestDirectSwap(event, targetEmployee) {
+        if (!event || !targetEmployee) return;
+        const shiftId = Number(event.id);
+        if (!Number.isFinite(shiftId) || shiftId <= 0) {
+          return showErrorMessage("Shift missing ID");
+        }
+        if (isShiftActiveInPool(shiftId)) {
+          showErrorMessage("Shift is already in swap pool");
+          return;
+        }
+        if (
+          AppState.swapRequests.some(
+            (r) =>
+              Number(r.shiftId) === shiftId &&
+              r.toEmployee === targetEmployee &&
+              (r.status === "pending" || r.status === "awaiting_approval")
+          )
+        ) {
+          return showErrorMessage("Already requested");
+        }
+        const fromId = resolveUserEmployeeId();
+        const toId = getEmployeeIdByName(targetEmployee);
+        if (fromId == null || toId == null) {
+          return showErrorMessage("Could not resolve employees for swap.");
+        }
+        try {
+          const res = await fetch(`${API_BASE}/swap-requests`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              shift_id: shiftId,
+              from_employee_id: fromId,
+              to_employee_id: toId,
+              status: "pending",
+            }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          await loadSwapRequestsFromServer();
+          renderSwapRequests();
+          renderCalendarFromState();
+          updateNotifications();
+          clearSelections();
+          if (targetEmployee === user.name) return;
+          showSuccessMessage("Swap request sent");
+        } catch (err) {
+          console.error(err);
+          showErrorMessage("Failed to send swap request");
+        }
+      }
+
+      function submitDirectSwapRequest() {
+        if (selectedEvents.length !== 1) return;
+        const targetId = document.getElementById("directSwapTarget")?.value;
+        if (!targetId) {
+          showErrorMessage("Please select an employee.");
+          return;
+        }
+        const emp = employees.find((e) => String(e.id) === String(targetId));
+        if (!emp) {
+          showErrorMessage("Please select an employee.");
+          return;
+        }
+        void requestDirectSwap(selectedEvents[0], emp.name).finally(() =>
+          removeDirectSwapModal()
+        );
+      }
+
+      async function acceptSwap(requestId) {
+        const req = AppState.swapRequests.find((r) => r.id === requestId);
+        if (!req || req.status !== "pending") return;
+
+        const event = getAllEvents().find((e) => Number(e.id) === Number(req.shiftId));
+        if (!event) return;
+        const toId = getEmployeeIdByName(req.toEmployee);
+        if (
+          toId == null ||
+          !canAssign(toId, new Date(event.start), new Date(event.end), req.shiftId)
+        ) {
+          showErrorMessage("Cannot take this shift (conflict)");
+          return;
+        }
+
+        try {
+          const res = await fetch(`${API_BASE}/swap-requests/${requestId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "awaiting_approval" }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          await loadSwapRequestsFromServer();
+          renderSwapRequests();
+          renderCalendarFromState();
+          updateNotifications();
+          showSuccessMessage("Swap pending manager approval");
+        } catch (err) {
+          console.error(err);
+          showErrorMessage("Failed to accept swap");
+        }
+      }
+
+      async function ownerApproveDirectSwap(requestId) {
+        const role = normalizeUserRole(user.role);
+        if (role !== "owner" && role !== "manager") return;
+        const req = AppState.swapRequests.find((r) => r.id === requestId);
+        if (!req || req.status !== "awaiting_approval") return;
+
+        const event = getAllEvents().find((e) => Number(e.id) === Number(req.shiftId));
+        if (!event) return;
+        const toIdApprove = getEmployeeIdByName(req.toEmployee);
+        if (
+          toIdApprove == null ||
+          !canAssign(
+            toIdApprove,
+            new Date(event.start),
+            new Date(event.end),
+            req.shiftId
+          )
+        ) {
+          showErrorMessage("Cannot approve: assignee conflict");
+          return;
+        }
+
+        AppState.events = getAllEvents().map((e) =>
+          Number(e.id) === Number(req.shiftId)
+            ? { ...e, employeeId: toIdApprove }
+            : e
+        );
+
+        try {
+          await persistShiftsToServer();
+          const res1 = await fetch(`${API_BASE}/swap-requests/${requestId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "approved" }),
+          });
+          if (!res1.ok) throw new Error(await res1.text());
+          await loadSwapRequestsFromServer();
+          renderCalendarFromState();
+          renderSwapRequests();
+          updateNotifications();
+          clearSelections();
+          showSuccessMessage("Swap approved");
+        } catch (err) {
+          console.error(err);
+          showErrorMessage("Failed to approve swap");
+        }
+      }
+
+      async function rejectSwap(requestId) {
+        const req = AppState.swapRequests.find((r) => r.id === requestId);
+        if (!req) return;
+        try {
+          const res = await fetch(`${API_BASE}/swap-requests/${requestId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "rejected" }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          await loadSwapRequestsFromServer();
+          renderSwapRequests();
+          renderCalendarFromState();
+          updateNotifications();
+          clearSelections();
+          showSuccessMessage("Swap rejected");
+        } catch (err) {
+          console.error(err);
+          showErrorMessage("Failed to reject swap");
+        }
+      }
+
+      function renderSwapRequests() {
+        const list = document.getElementById("swapRequestsList");
+        if (!list) return;
+        const role = normalizeUserRole(user.role);
+        const isMod = role === "owner" || role === "manager";
+        const active = (s) => s === "pending" || s === "awaiting_approval";
+
+        let requests;
+        if (isMod) {
+          requests = AppState.swapRequests.filter((r) => active(r.status));
+        } else {
+          requests = AppState.swapRequests.filter(
+            (r) => r.toEmployee === user.name && active(r.status)
+          );
+        }
+        list.innerHTML = "";
+        if (requests.length === 0) {
+          list.innerHTML = "<li style='opacity:0.6'>No requests</li>";
+          return;
+        }
+        requests.forEach((req) => {
+          const event = getAllEvents().find(
+            (e) => Number(e.id) === Number(req.shiftId)
+          );
+          const shiftInfo = event
+            ? `${event.start.toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+              })} ${event.start.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}-${event.end.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}`
+            : "Shift no longer exists";
+
+          let suffix = "";
+          if (!isMod && req.toEmployee === user.name) {
+            suffix =
+              req.status === "pending"
+                ? " · Pending your response"
+                : " · Pending manager approval";
+          } else if (isMod) {
+            suffix =
+              req.status === "pending"
+                ? " · Waiting for recipient"
+                : " · Needs your approval";
+          }
+
+          const li = document.createElement("li");
+          const span = document.createElement("span");
+          span.textContent = `${req.fromEmployee} → ${req.toEmployee} | ${shiftInfo}${suffix}`;
+
+          const actions = document.createElement("div");
+          actions.style.cssText = "display:flex;gap:0.35rem;flex-wrap:wrap;";
+
+          if (!isMod && req.toEmployee === user.name && req.status === "pending") {
+            const b1 = document.createElement("button");
+            b1.className = "button view-only small";
+            b1.textContent = "Accept";
+            b1.onclick = () => acceptSwap(req.id);
+            const b2 = document.createElement("button");
+            b2.className = "button view-only small";
+            b2.textContent = "Reject";
+            b2.style.background = "#6b7280";
+            b2.onclick = () => rejectSwap(req.id);
+            actions.appendChild(b1);
+            actions.appendChild(b2);
+          } else if (isMod && req.status === "awaiting_approval") {
+            const b1 = document.createElement("button");
+            b1.className = "button view-only small";
+            b1.textContent = "Approve";
+            b1.onclick = () => ownerApproveDirectSwap(req.id);
+            const b2 = document.createElement("button");
+            b2.className = "button view-only small";
+            b2.textContent = "Reject";
+            b2.style.background = "#6b7280";
+            b2.onclick = () => rejectSwap(req.id);
+            actions.appendChild(b1);
+            actions.appendChild(b2);
+          }
+
+          li.appendChild(span);
+          if (actions.childNodes.length) li.appendChild(actions);
+          list.appendChild(li);
+        });
+        updateNotifications();
+      }
+
+      // Modal functions
+      function showModal(modalId) {
+        hideAllModals();
+        document.getElementById(modalId).classList.add("active");
+      }
+
+      function hideModal(modalId) {
+        document.getElementById(modalId).classList.remove("active");
+      }
+
+      function hideAllModals() {
+        const modals = document.querySelectorAll(".modal-backdrop");
+        modals.forEach((modal) => modal.classList.remove("active"));
+      }
+
+      // Initialize application
+      document.addEventListener("DOMContentLoaded", async function () {
+        // User authentication check
+        user = AppState.user;
+        if (!user) {
+          window.location.href = "login.html";
+        }
+        if (!user.role) user.role = "employee";
+        console.log("USER:", user);
+
+        await hydrateEmployeesFromApi();
+        await loadShiftsFromServer();
+        await loadShiftPoolFromServer();
+        await loadSwapRequestsFromServer();
+        await loadSentDaysFromServer();
+        migrateSwapPoolShape();
+
+        const canManageSchedule =
+          user.role === "owner" || user.role === "manager";
+
+        // Initialize calendar
+        const calendarEl = document.getElementById("calendar");
+        calendar = new FullCalendar.Calendar(calendarEl, {
+          initialView: "timeGridWeek",
+          headerToolbar: {
+            left: "prev,next today",
+            center: "title",
+            right: "dayGridMonth,timeGridWeek",
+          },
+          editable: canManageSchedule,
+          selectable: canManageSchedule,
+          selectMirror: true,
+          dayMaxEvents: true,
+          slotDuration: "00:15:00",
+          slotLabelInterval: "00:15:00",
+          events: getAllEvents().map(toCalendarEvent),
+          slotMinTime: "08:00:00",
+          slotMaxTime: "24:00:00",
+          displayEventTime: true,
+          displayEventEnd: true,
+          eventTimeFormat: {
+            hour: "numeric",
+            minute: "2-digit",
+            meridiem: "short",
+          },
+          views: {
+            timeGridWeek: {
+              dayHeaderFormat: { weekday: "long" },
+              slotLabelFormat: {
+                hour: "numeric",
+                minute: "2-digit",
+                meridiem: "short",
+              },
+              displayEventTime: true,
+              displayEventEnd: true,
+            },
+            dayGridMonth: {
+              dayHeaderFormat: { weekday: "short" },
+              displayEventTime: true,
+              displayEventEnd: true,
+              eventDisplay: "block",
+              eventTimeFormat: {
+                hour: "numeric",
+                minute: "2-digit",
+                meridiem: "short",
+              },
+            },
+          },
+          dayCellDidMount: function (info) {
+            if (info.view.type.startsWith("dayGrid")) {
+              mountSentDayDot(info);
+            }
+          },
+          dayHeaderDidMount: function (arg) {
+            if (arg.view.type.startsWith("timeGrid")) {
+              mountSentDayDot(arg);
+            }
+          },
+          eventDidMount: function (info) {
+            info.el.style.display = "block";
+            info.el.style.backgroundColor = info.event.backgroundColor;
+            info.el.style.borderColor = info.event.borderColor;
+            info.el.style.color = info.event.textColor;
+            info.el.title = info.event.title;
+          },
+          eventClick: function (info) {
+            selectedDays.clear();
+            selectedDates = [];
+            calendar.getEvents().forEach((event) => {
+              event.setProp("borderColor", "");
+              event.setProp("borderWidth", "");
+            });
+            updateScheduleExportSummaryLabel();
+
+            if (info.jsEvent.shiftKey && canManageSchedule) {
+              selectedEvents.push(info.event);
+              info.event.setProp("borderColor", "#dc2626");
+              info.event.setProp("borderWidth", "2px");
+            } else {
+              selectedEvents = [info.event];
+              info.event.setProp("borderColor", "#dc2626");
+              info.event.setProp("borderWidth", "2px");
+
+              const eventEmployee = getEmployeeFromEvent(info.event);
+              const role = normalizeUserRole(user.role);
+              const canManageShift =
+                role === "owner" ||
+                role === "manager" ||
+                eventEmployee === user.name;
+
+              if (role === "employee" && canManageShift) {
+                openShiftActionModal();
+              } else if (
+                (role === "owner" || role === "manager") &&
+                shouldShowOwnerShiftTip()
+              ) {
+                openShiftActionModal();
+              }
+            }
+          },
+          select: function (info) {
+            if (canManageSchedule) {
+              selectedDates = [];
+              let current = new Date(info.start);
+              while (current < info.end) {
+                selectedDates.push(new Date(current));
+                current.setDate(current.getDate() + 1);
+              }
+
+              selectedEvents.forEach((event) => {
+                event.setProp("borderColor", "");
+                event.setProp("borderWidth", "");
+              });
+              selectedEvents = [];
+              highlightSelectedDays();
+              updateScheduleExportSummaryLabel();
+            }
+          },
+          dateClick: function (info) {
+            if (!canManageSchedule) return;
+
+            const clicked = new Date(info.date);
+            clicked.setHours(0, 0, 0, 0);
+
+            selectedEvents.forEach((event) => {
+              event.setProp("borderColor", "");
+              event.setProp("borderWidth", "");
+            });
+            selectedEvents = [];
+
+            if (info.jsEvent.ctrlKey || info.jsEvent.metaKey) {
+              const index = selectedDates.findIndex((d) => isSameDay(d, clicked));
+              if (index >= 0) {
+                selectedDates.splice(index, 1);
+              } else {
+                selectedDates.push(clicked);
+              }
+            } else {
+              selectedDates = [clicked];
+            }
+
+            highlightSelectedDays();
+            updateScheduleExportSummaryLabel();
+            showSuccessMessage("Press A to assign shift");
+          },
+          eventDrop: function (info) {
+            const state = getAllEvents().find(
+              (e) => Number(e.id) === Number(info.event.id)
+            );
+            if (!state) {
+              info.revert();
+              return;
+            }
+            const moved = {
+              ...state,
+              start: new Date(info.event.start),
+              end: new Date(info.event.end),
+            };
+            if (!canAssign(moved.employeeId, moved.start, moved.end, moved.id)) {
+              info.revert();
+              showErrorMessage("Cannot move shift there");
+              return;
+            }
+            AppState.events = getAllEvents().map((e) =>
+              Number(e.id) === Number(moved.id) ? moved : e
+            );
+            hasUnsavedChanges = true;
+            saveEventsToLocalStorage();
+            renderCalendarFromState();
+            showWeeklyHours();
+          },
+          eventResize: function (info) {
+            const state = getAllEvents().find(
+              (e) => Number(e.id) === Number(info.event.id)
+            );
+            if (!state) {
+              info.revert();
+              return;
+            }
+            const moved = {
+              ...state,
+              start: new Date(info.event.start),
+              end: new Date(info.event.end),
+            };
+            if (!canAssign(moved.employeeId, moved.start, moved.end, moved.id)) {
+              info.revert();
+              showErrorMessage("Cannot resize shift there");
+              return;
+            }
+            AppState.events = getAllEvents().map((e) =>
+              Number(e.id) === Number(moved.id) ? moved : e
+            );
+            hasUnsavedChanges = true;
+            saveEventsToLocalStorage();
+            renderCalendarFromState();
+            showWeeklyHours();
+          },
+        });
+        try {
+          calendar.render();
+        } catch (e) {
+          console.error("Calendar failed:", e);
+        }
+
+        // Add datesSet event listener
+        calendar.on("datesSet", function (info) {
+          showWeeklyHours();
+        });
+
+        // Add click handler for the calendar background to clear selection
+        calendarEl.addEventListener("click", function (e) {
+          if (
+            e.target === calendarEl ||
+            e.target.classList.contains("fc-view")
+          ) {
+            selectedEvents.forEach((event) => {
+              event.setProp("borderColor", "");
+              event.setProp("borderWidth", "");
+            });
+            selectedEvents = [];
+            selectedDays.clear();
+            selectedDates = [];
+            updateScheduleExportSummaryLabel();
+          }
+        });
+
+        // HARD PERMISSION CONTROL
+        const ownerControls = document.querySelectorAll(".owner-only");
+        ownerControls.forEach((btn) => {
+          btn.style.display =
+            user.role === "owner" || user.role === "manager" ? "" : "none";
+        });
+        if (normalizeUserRole(user.role) === "employee") {
+          document.querySelectorAll(".owner-only").forEach((el) => el.remove());
+        }
+
+        document.querySelectorAll(".schedule-share-btn").forEach((btn) => {
+          btn.style.display = user.role === "employee" ? "none" : "";
+        });
+
+        const assignRole = normalizeUserRole(user.role);
+        const assignControls = document.querySelector(".assign-controls");
+        if (assignControls && assignRole === "employee") {
+          assignControls.style.gap = "0.5rem";
+        }
+
+        if (
+          (user.role === "owner" || user.role === "manager") &&
+          !localStorage.getItem("seenAssignDayHint")
+        ) {
+          localStorage.setItem("seenAssignDayHint", "1");
+          showSuccessMessage("Click a day, then press A to assign a shift");
+        }
+
+        // Show initial hours
+        showWeeklyHours();
+        renderSwapPool();
+        renderSwapRequests();
+        updateNotifications();
+        updateScheduleExportSummaryLabel();
+
+        // ROLE-BASED VISIBILITY FIX
+        const swapPoolBox = document.getElementById("swapPoolBox");
+        const swapRequestsBox = document.getElementById("swapRequestsBox");
+
+        if (swapPoolBox) swapPoolBox.style.display = "block";
+        if (swapRequestsBox) swapRequestsBox.style.display = "block";
+
+        // Save changes when leaving page
+        window.addEventListener("beforeunload", function (e) {
+          if (hasUnsavedChanges) {
+            saveEventsToLocalStorage();
+          }
+        });
+
+        // Initialize dark mode and balls if settings exist
+        if (localStorage.getItem("darkMode") === "true") {
+          document.body.classList.add("dark");
+          document.getElementById("darkModeToggle").checked = true;
+        }
+
+        if (localStorage.getItem("ballsEnabled") === "false") {
+          document.getElementById("ballContainer").style.display = "none";
+          document.getElementById("ballsToggle").checked = false;
+        } else {
+          document.getElementById("ballsToggle").checked = true;
+        }
+
+        const sentDotsEnabled =
+          localStorage.getItem("sentDotsEnabled") !== "false";
+        document.getElementById("sentDotsToggle").checked = sentDotsEnabled;
+
+        // Initialize template manager
+        initializeTemplateManager();
+      });
+
+      // Keyboard shortcuts
+      document.addEventListener("keydown", function (e) {
+        const canManageSchedule =
+          user.role === "owner" || user.role === "manager";
+        if (!canManageSchedule || !calendar) return;
+
+        const tag = e.target && e.target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+        switch (e.key) {
+          case "d":
+            if (selectedEvents.length > 0) {
+              const additions = [];
+              selectedEvents.forEach((fcEvent) => {
+                const state = getAllEvents().find(
+                  (e) => Number(e.id) === Number(fcEvent.id)
+                );
+                if (!state) return;
+                additions.push(
+                  createShiftEvent({
+                    employeeId: state.employeeId,
+                    shiftType: state.shiftType,
+                    start: new Date(
+                      state.start.getTime() + 24 * 60 * 60 * 1000
+                    ),
+                    end: new Date(state.end.getTime() + 24 * 60 * 60 * 1000),
+                  })
+                );
+              });
+              if (additions.length === 0) break;
+              AppState.events = [...getAllEvents(), ...additions];
+              hasUnsavedChanges = true;
+              saveEventsToLocalStorage();
+              renderCalendarFromState();
+              selectedEvents = [];
+              showWeeklyHours();
+              showSuccessMessage("Shift(s) duplicated successfully!");
+            }
+            break;
+          case "Backspace":
+          case "Delete":
+            if (selectedDays.size > 0) {
+              // Get all events on selected days
+              const eventsToDelete = getAllEvents().filter((event) => {
+                const eventDate = event.start.toDateString();
+                return selectedDays.has(eventDate);
+              });
+
+              if (eventsToDelete.length > 0) {
+                const message = `Are you sure you want to delete all ${eventsToDelete.length} shifts?`;
+                if (confirm(message)) {
+                  const idsToDelete = new Set(
+                    eventsToDelete.map((e) => Number(e.id))
+                  );
+                  AppState.events = getAllEvents().filter(
+                    (e) => !idsToDelete.has(Number(e.id))
+                  );
+                  renderCalendarFromState();
+                  selectedDays.clear();
+                  selectedDates = [];
+                  updateScheduleExportSummaryLabel();
+                  hasUnsavedChanges = true;
+                  saveEventsToLocalStorage();
+                  showWeeklyHours();
+                  showSuccessMessage(`Deleted ${eventsToDelete.length} shifts`);
+                }
+              } else {
+                showErrorMessage("No shifts found on selected days");
+              }
+            } else if (selectedEvents.length > 0) {
+              const message =
+                selectedEvents.length === 1
+                  ? "Are you sure you want to delete this shift?"
+                  : `Are you sure you want to delete ${selectedEvents.length} shifts?`;
+
+              if (confirm(message)) {
+                const count = selectedEvents.length;
+                const idsToDelete = new Set(
+                  selectedEvents.map((e) => Number(e.id))
+                );
+                AppState.events = getAllEvents().filter(
+                  (e) => !idsToDelete.has(Number(e.id))
+                );
+                renderCalendarFromState();
+                selectedEvents = [];
+                hasUnsavedChanges = true;
+                saveEventsToLocalStorage();
+                showWeeklyHours();
+                showSuccessMessage(`Deleted ${count} shifts`);              }
+            } else {
+              showErrorMessage("No days or shifts selected");
+            }
+            break;
+          case "r":
+            if (selectedEvents.length === 1) {
+              showReassignModal();
+            } else if (selectedEvents.length > 1) {
+              showErrorMessage("Can only reassign one shift at a time");
+            }
+            break;
+          case "a":
+          case "A":
+            e.preventDefault();
+            if (selectedDates.length === 1) {
+              openAssignShiftModal(selectedDates[0]);
+            } else {
+              showErrorMessage("Select one day to assign");
+            }
+            break;
+          case "h":
+          case "H":
+            e.preventDefault();
+
+            if (selectedDates.length === 0) return;
+
+            void (async () => {
+              const uid = resolveUserEmployeeId();
+              for (const dateObj of selectedDates) {
+                const d = new Date(dateObj);
+                const key = d.toDateString();
+                const iso = d.toISOString().slice(0, 10);
+                try {
+                  if (sentDateKeySet.has(key)) {
+                    const res = await fetch(`${API_BASE}/sent-days/${iso}`, {
+                      method: "DELETE",
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    sentDateKeySet.delete(key);
+                  } else {
+                    const res = await fetch(`${API_BASE}/sent-days`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ date: iso, sent_by: uid }),
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    sentDateKeySet.add(key);
+                  }
+                } catch (err) {
+                  console.error(err);
+                  showErrorMessage("Could not update sent days");
+                  return;
+                }
+              }
+              calendar.changeView(calendar.view.type);
+              updateSentDotsUI();
+              showSuccessMessage("Toggled selected days");
+            })();
+            break;
+        }
+      });
+
+      function showReassignModal() {
+        const currentEvent = selectedEvents[0];
+        const currentEmployeeId = getEmployeeIdFromCalendarEvent(currentEvent);
+        const currentShiftType = getShiftTypeFromEvent(currentEvent);
+
+        const availableEmployees = employees.filter(
+          (emp) => Number(emp.id) !== Number(currentEmployeeId)
+        );
+
+        const modalContent = `
+    <div class="modal-content">
+      <button class="close-popup" onclick="removeReassignModal()">
+        <i class="fas fa-times"></i>
+      </button>
+      <h2>Reassign Shift</h2>
+
+      <div style="margin-bottom: 1.2rem">
+        <label for="reassignEmpSelect">Select Employee</label>
+        <select id="reassignEmpSelect" class="select">
+          <option value="">Select Employee</option>
+          ${availableEmployees
+            .map((emp) => `<option value="${emp.id}">${emp.name}</option>`)
+            .join("")}
+        </select>
+      </div>
+
+      <div style="margin-bottom: 1.5rem">
+        <label for="reassignShiftType">Shift Type</label>
+        <select id="reassignShiftType" class="select">
+          <option value="Open" ${
+            currentShiftType === "Open" ? "selected" : ""
+          }>Open</option>
+          <option value="Floor" ${
+            currentShiftType === "Floor" ? "selected" : ""
+          }>Floor</option>
+          <option value="Close" ${
+            currentShiftType === "Close" ? "selected" : ""
+          }>Close</option>
+        </select>
+      </div>
+
+      <div class="button-group">
+        <button class="button" onclick="confirmReassign()">
+          Reassign
+        </button>
+        <button class="button" onclick="removeReassignModal()" style="background: #6b7280">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+
+        const modal = document.createElement("div");
+        modal.id = "reassignModal";
+        modal.className = "modal-backdrop active";
+        modal.innerHTML = modalContent;
+        document.body.appendChild(modal);
+      }
+
+      function confirmReassign() {
+        const empEl = document.getElementById("reassignEmpSelect");
+        const typeEl = document.getElementById("reassignShiftType");
+
+        if (!empEl || !typeEl || selectedEvents.length !== 1) {
+          showErrorMessage("Invalid reassignment");
+          return;
+        }
+
+        const selectedEmployeeId = Number(empEl.value);
+        const selectedShiftType = typeEl.value;
+
+        if (!Number.isFinite(selectedEmployeeId) || selectedEmployeeId <= 0 || !selectedShiftType) {
+          alert("Please select both an employee and a shift type.");
+          return;
+        }
+
+        const selectedId = selectedEvents[0].id;
+        AppState.events = getAllEvents().map((e) =>
+          Number(e.id) === Number(selectedId)
+            ? {
+                ...e,
+                employeeId: selectedEmployeeId,
+                shiftType: selectedShiftType,
+              }
+            : e
+        );
+        renderCalendarFromState();
+
+        hasUnsavedChanges = true;
+        saveEventsToLocalStorage();
+        showWeeklyHours();
+        removeReassignModal(); 
+        showSuccessMessage("Shift reassigned successfully!");
+      }
+
+      function formatDate(date) {
+        return date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
+      }
+
+      // Show weekly hours
+      function showWeeklyHours() {
+        if (!calendar) return;
+
+        const view = calendar.view;
+        const viewType = view.type;
+
+        // Use currentStart/currentEnd for period calculations
+        const periodStart = new Date(view.currentStart);
+        const periodEnd = new Date(view.currentEnd);
+
+        // Update section title based on view
+        const hoursTitle = document.getElementById("hoursTitle");
+        hoursTitle.textContent =
+          viewType === "dayGridMonth" ? "Monthly Hours" : "Weekly Hours";
+
+        // Format period display
+        const periodElement = document.getElementById("hoursPeriod");
+        if (viewType === "dayGridMonth") {
+          periodElement.textContent = periodStart.toLocaleString("default", {
+            month: "long",
+            year: "numeric",
+          });
+        } else {
+          const weekEnd = new Date(periodEnd);
+          weekEnd.setDate(weekEnd.getDate() - 1); // Adjust to last day of week
+          periodElement.textContent = `${formatDate(
+            periodStart
+          )} - ${formatDate(weekEnd)}`;
+        }
+
+        // Calculate hours for events in the current view period
+        const events = getAllEvents().filter(
+          (event) => event.start >= periodStart && event.start < periodEnd
+        );
+
+        const hoursPerPerson = {};
+        let totalHours = 0;
+
+        events.forEach((event) => {
+          const name = getEmployeeNameById(event.employeeId);
+          if (!name) return;
+          const duration = (event.end - event.start) / (1000 * 60 * 60);
+
+          if (!hoursPerPerson[name]) hoursPerPerson[name] = 0;
+          hoursPerPerson[name] += duration;
+          totalHours += duration;
+        });
+
+        // Update total hours display
+        document.getElementById(
+          "hoursTotal"
+        ).textContent = `Total: ${totalHours.toFixed(1)} hours`;
+
+        // Store view data
+        currentViewHoursData = Object.entries(hoursPerPerson).map(
+          ([name, hours]) => ({
+            name,
+            hours: hours.toFixed(1),
+          })
+        );
+
+        // Filter hours list
+        filterHoursList();
+      }
+
+      // Filter hours list by name
+      function filterHoursList() {
+        const searchText = (
+          document.getElementById("hoursSearchInput").value || ""
+        ).toLowerCase();
+
+        // Sort first, then filter
+        const filteredData = currentViewHoursData
+          .filter((employee) =>
+            employee.name.toLowerCase().includes(searchText)
+          )
+          .sort((a, b) => parseFloat(b.hours) - parseFloat(a.hours)); // Descending order by hours
+
+        const weeklyHoursList = document.getElementById("weeklyHoursList");
+        const noHoursMessage = document.getElementById("noHoursMessage");
+
+        weeklyHoursList.innerHTML = "";
+        visibleHoursCount = filteredData.length;
+
+        if (filteredData.length === 0) {
+          noHoursMessage.style.display = "block";
+        } else {
+          noHoursMessage.style.display = "none";
+          filteredData.forEach(({ name, hours }) => {
+            const li = document.createElement("li");
+            li.innerHTML = `
+        <span>${name}</span>
+        <span>${hours} hours</span>
+      `;
+            weeklyHoursList.appendChild(li);
+          });
+        }
+
+        // Update hours count display
+        updateHoursCount();
+      }
+
+      // Update hours count display
+      function updateHoursCount() {
+        document.getElementById(
+          "hoursCount"
+        ).textContent = `Showing ${visibleHoursCount} employee${
+          visibleHoursCount !== 1 ? "s" : ""
+        }`;
+      }
+
+      // Update event title
+      function updateEventTitle(event) {
+        event.setProp(
+          "title",
+          formatTitle({
+            employeeId: getEmployeeIdFromCalendarEvent(event),
+            shiftType: getShiftTypeFromEvent(event),
+            start: event.start,
+            end: event.end,
+          })
+        );
+      }
+
+      function escapeHtmlSchedule(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function openAssignShiftModal(date) {
+        document.getElementById("assignShiftModalBackdrop")?.remove();
+
+        const dayMs = date.getTime();
+        const opts = employees
+          .map(
+            (emp) =>
+              `<option value="${escapeHtmlSchedule(String(emp.id))}">${escapeHtmlSchedule(
+                emp.name
+              )}</option>`
+          )
+          .join("");
+
+        const modal = document.createElement("div");
+        modal.id = "assignShiftModalBackdrop";
+        modal.className = "modal-backdrop active";
+        modal.innerHTML = `
+    <div class="modal-content">
+      <button type="button" class="close-popup" data-assign-close>
+        <i class="fas fa-times"></i>
+      </button>
+      <h2>Assign Shift</h2>
+      <select id="assignModalEmp" class="select" style="width:100%;margin:1rem 0 0;padding:0.6rem;border-radius:var(--radius);">
+        <option value="">Select Employee</option>
+        ${opts}
+      </select>
+      <select id="assignShiftType" class="select" style="width:100%;margin:0.75rem 0 0;padding:0.6rem;border-radius:var(--radius);">
+        <option value="">Select Shift Type</option>
+        <option value="Open">Open</option>
+        <option value="Floor">Floor</option>
+        <option value="Close">Close</option>
+      </select>
+      <div class="button-group" style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:1rem;">
+        <button type="button" class="button" data-assign-confirm>
+          Assign
+        </button>
+        <button type="button" class="button" style="background:#6b7280" data-assign-close>
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+        modal.querySelectorAll("[data-assign-close]").forEach((btn) => {
+          btn.addEventListener("click", () => modal.remove());
+        });
+        modal
+          .querySelector("[data-assign-confirm]")
+          .addEventListener("click", () => confirmAssignShift(dayMs));
+        document.body.appendChild(modal);
+      }
+
+      function confirmAssignShift(dayMs) {
+        const empEl = document.getElementById("assignModalEmp");
+        const typeEl = document.getElementById("assignShiftType");
+        const employeeId = empEl ? Number(empEl.value) : NaN;
+        const shiftType = typeEl ? typeEl.value : "";
+
+        if (!Number.isFinite(employeeId) || employeeId <= 0 || !shiftType) {
+          showErrorMessage("Select employee and shift type");
+          return;
+        }
+
+        const day = new Date(dayMs);
+        const start = new Date(day);
+        const end = new Date(day);
+
+        if (shiftType === "Open") {
+          start.setHours(9, 45, 0, 0);
+          end.setHours(14, 45, 0, 0);
+        } else if (shiftType === "Floor") {
+          start.setHours(12, 0, 0, 0);
+          end.setHours(17, 0, 0, 0);
+        } else if (shiftType === "Close") {
+          start.setHours(17, 0, 0, 0);
+          end.setHours(22, 0, 0, 0);
+        }
+
+        if (!canAssign(employeeId, start, end)) {
+          showErrorMessage("Cannot assign shift (rules conflict)");
+          return;
+        }
+
+        const newEvent = createShiftEvent({
+          employeeId,
+          shiftType,
+          start,
+          end,
+        });
+
+        AppState.events = [...getAllEvents(), newEvent];
+        renderCalendarFromState();
+        saveEventsToLocalStorage();
+        showWeeklyHours();
+        hasUnsavedChanges = true;
+
+        document.getElementById("assignShiftModalBackdrop")?.remove();
+        showSuccessMessage(`${shiftType} shift created — drag to adjust`);
+      }
+
+      // Persist shifts to API (debounced via queuePersistShifts)
+      function saveEventsToLocalStorage() {
+        AppState.events = getAllEvents();
+        syncUserPreferenceState();
+        queuePersistShifts();
+      }
+
+      // Get shift color
+      function getShiftColor(shiftType) {
+        switch (shiftType) {
+          case "Open":
+            return "#4CAF50";
+          case "Close":
+            return "#F44336";
+          case "Floor":
+            return "#2196F3";
+          default:
+            return "#10b981";
+        }
+      }
+
+      // Generate schedule
+      function generateSchedule() {
+        if (window.isGenerating) return;
+        window.isGenerating = true;
+        document.body.style.cursor = "wait";
+        let bestSchedule = null;
+        let bestScore = Infinity;
+        let bestMissingShifts = [];
+
+        if (employees.length === 0) {
+          showErrorMessage("No employees available");
+          window.isGenerating = false;
+          document.body.style.cursor = "default";
+          return;
+        }
+
+        const today = new Date();
+        const targetWeekStart = new Date(today);
+        targetWeekStart.setDate(today.getDate() - today.getDay());
+        targetWeekStart.setHours(0, 0, 0, 0);
+
+        const allEvents = getAllEvents();
+        while (true) {
+          const weekEnd = new Date(targetWeekStart);
+          weekEnd.setDate(targetWeekStart.getDate() + 6);
+          weekEnd.setHours(23, 59, 59, 999);
+
+          const weekShifts = allEvents.filter((event) => {
+            const date = new Date(event.start);
+            return date >= targetWeekStart && date <= weekEnd;
+          });
+
+          if (weekShifts.length === 0) break;
+          targetWeekStart.setDate(targetWeekStart.getDate() + 7);
+        }
+
+        for (let attempt = 0; attempt < CONFIG.ATTEMPTS; attempt++) {
+          let generatedEvents = [];
+          let missingShifts = [];
+          const templates = safeParse("scheduleTemplates", {});
+          const selectedTemplate =
+            localStorage.getItem("selectedTemplate") || null;
+
+          const currentWeekStart = new Date(targetWeekStart);
+          const existingEvents = getAllEvents();
+
+          // Initialize employee hour tracker
+          const hoursMap = {};
+          employees.forEach((emp) => (hoursMap[emp.name] = 0));
+
+          // ===== HISTORY (controlled + safe) =====
+          const HISTORY_DAYS = 7;
+          const HISTORY_WEIGHT = 0.4;
+
+          const cutoff = new Date();
+          cutoff.setDate(cutoff.getDate() - HISTORY_DAYS);
+
+          existingEvents.forEach((event) => {
+            const start = new Date(event.start);
+
+            if (start < cutoff) return; // ignore old data
+
+            const end = new Date(event.end);
+            const name = getEmployeeNameById(event.employeeId);
+            if (!name) return;
+            const hours = (end - start) / (1000 * 60 * 60);
+
+            // apply weighted history
+            hoursMap[name] = (hoursMap[name] || 0) + hours * HISTORY_WEIGHT;
+          });
+
+          if (selectedTemplate && templates[selectedTemplate]) {
+            const template = templates[selectedTemplate];
+
+            for (let i = 0; i < 7; i++) {
+              const currentDate = new Date(currentWeekStart);
+              currentDate.setDate(currentWeekStart.getDate() + i);
+              const dateKey = currentDate.toDateString();
+              const dayName = currentDate
+                .toLocaleDateString("en-US", { weekday: "long" })
+                .toLowerCase();
+
+              if (!template.days[dayName] || !template.days[dayName].enabled)
+                continue;
+
+              template.days[dayName].shifts.forEach((shift) => {
+                if (
+                  !shift.startTime ||
+                  !shift.endTime ||
+                  !String(shift.startTime).includes(":") ||
+                  !String(shift.endTime).includes(":")
+                ) {
+                  missingShifts.push(
+                    `${shift.type || "Shift"} on ${dateKey} (invalid template time)`
+                  );
+                  return;
+                }
+
+                const [sh, sm] = String(shift.startTime).split(":").map(Number);
+                const [eh, em] = String(shift.endTime).split(":").map(Number);
+
+                if (
+                  Number.isNaN(sh) ||
+                  Number.isNaN(sm) ||
+                  Number.isNaN(eh) ||
+                  Number.isNaN(em)
+                ) {
+                  missingShifts.push(
+                    `${shift.type || "Shift"} on ${dateKey} (bad time values)`
+                  );
+                  return;
+                }
+
+                const startTime = new Date(currentDate);
+                startTime.setHours(sh, sm);
+
+                const endTime = new Date(currentDate);
+                endTime.setHours(eh, em);
+
+                if (endTime <= startTime) {
+                  missingShifts.push(
+                    `${shift.type || "Shift"} on ${dateKey} (end must be after start)`
+                  );
+                  return;
+                }
+
+                const duration = (endTime - startTime) / (1000 * 60 * 60);
+
+                const requireKeyholder =
+                  shift.type === "Open" || shift.type === "Close";
+                let pool = getEligibleEmployees(employees, requireKeyholder);
+                let available = pool.filter((emp) =>
+                  canAssign(Number(emp.id), startTime, endTime)
+                );
+                if (attempt === 0) console.log(available.length);
+
+                if (available.length === 0) {
+                  console.warn(`No available employee for ${shift.type} on ${dateKey}`);
+                  missingShifts.push(`${shift.type} on ${dateKey}`);
+                  return;
+                }
+
+                available.sort((a, b) => {
+                  const hoursA = hoursMap[a.name] || 0;
+                  const hoursB = hoursMap[b.name] || 0;
+                  return hoursA !== hoursB ? hoursA - hoursB : Math.random() - 0.5;
+                });
+
+                const chosen = available[0];
+                hoursMap[chosen.name] += duration;
+
+                const event = createShiftEvent({
+                  employeeId: Number(chosen.id),
+                  shiftType: shift.type,
+                  start: startTime,
+                  end: endTime,
+                });
+                generatedEvents.push(event);
+              });
+            }
+          } else {
+            // Fallback to one opener shift per weekday
+            for (let i = 0; i < 5; i++) {
+              const currentDate = new Date(currentWeekStart);
+              currentDate.setDate(currentWeekStart.getDate() + i);
+              const dateKey = currentDate.toDateString();
+              const start = new Date(currentDate);
+              start.setHours(9, 45, 0, 0);
+              const end = new Date(start);
+              end.setHours(end.getHours() + 5);
+
+              let pool = getEligibleEmployees(employees, true);
+              let available = pool.filter((emp) =>
+                canAssign(Number(emp.id), start, end)
+              );
+              if (attempt === 0) console.log(available.length);
+
+              if (available.length === 0) {
+                console.warn(`No available employee for Open on ${dateKey}`);
+                missingShifts.push(`Open on ${dateKey}`);
+                continue;
+              }
+
+              available.sort((a, b) => {
+                const hoursA = hoursMap[a.name] || 0;
+                const hoursB = hoursMap[b.name] || 0;
+                return hoursA !== hoursB ? hoursA - hoursB : Math.random() - 0.5;
+              });
+              const chosen = available[0];
+
+              const duration = CONFIG.SHIFT_DURATION;
+              hoursMap[chosen.name] += duration;
+
+              const event = createShiftEvent({
+                employeeId: Number(chosen.id),
+                shiftType: "Open",
+                start,
+                end,
+              });
+              generatedEvents.push(event);
+            }
+          }
+
+          console.log(
+            "Generated:",
+            generatedEvents.length,
+            "Missing:",
+            missingShifts.length
+          );
+
+          // Calculate fairness score
+          let avg =
+            Object.values(hoursMap).reduce((a, b) => a + b, 0) / employees.length;
+          let fairnessScore = Object.values(hoursMap)
+            .map((h) => Math.pow(h - avg, 2))
+            .reduce((a, b) => a + b, 0);
+          let coveragePenalty = missingShifts.length * 1000;
+          let score = coveragePenalty + fairnessScore * 2;
+
+          if (!Number.isFinite(score)) {
+            console.warn(
+              "Skipping schedule attempt: invalid score (check template shift times)"
+            );
+            continue;
+          }
+
+          // Keep best schedule
+          if (score < bestScore) {
+            bestScore = score;
+            bestSchedule = generatedEvents.map((e) => ({
+              id: e.id,
+              employeeId: e.employeeId,
+              shiftType: e.shiftType,
+              start: new Date(e.start),
+              end: new Date(e.end),
+            }));
+            bestMissingShifts = [...missingShifts];
+          }
+        }
+        // Apply best schedule
+        if (!bestSchedule) {
+          showErrorMessage("Failed to generate schedule");
+          window.isGenerating = false;
+          document.body.style.cursor = "default";
+          return;
+        }
+        const weekEnd = new Date(targetWeekStart);
+        weekEnd.setDate(targetWeekStart.getDate() + 7);
+        const preserved = getAllEvents().filter((event) => {
+          const date = new Date(event.start);
+          return !(date >= targetWeekStart && date < weekEnd);
+        });
+        AppState.events = [...preserved, ...bestSchedule.map(normalizeStateEvent)];
+        renderCalendarFromState();
+        pruneSwapPool();
+        renderSwapPool();
+
+        // NOW save + update UI
+        saveEventsToLocalStorage();
+        showWeeklyHours();
+        hasUnsavedChanges = true;
+        showSuccessMessage("Schedule generated successfully!");
+        if (bestMissingShifts.length > 0) {
+          showErrorMessage(
+            `Generated with ${bestMissingShifts.length} unfilled shift(s).`
+          );
+        }
+        
+        window.isGenerating = false;
+        document.body.style.cursor = "default";
+      }
+
+      // Utility functions
+      function showSuccessMessage(message) {
+        const messageDiv = document.createElement("div");
+        messageDiv.className = "success-message";
+        messageDiv.textContent = message;
+        document.body.appendChild(messageDiv);
+
+        setTimeout(() => {
+          messageDiv.remove();
+        }, 3000);
+      }
+
+      function showErrorMessage(message) {
+        const messageDiv = document.createElement("div");
+        messageDiv.className = "error-message";
+        messageDiv.textContent = message;
+        document.body.appendChild(messageDiv);
+
+        setTimeout(() => {
+          messageDiv.remove();
+        }, 3000);
+      }
+
+      // Settings functions
+      function toggleSettings() {
+        document.getElementById("settingsPanel").classList.toggle("active");
+      }
+
+      function toggleTheme() {
+        document.body.classList.toggle("dark");
+        localStorage.setItem(
+          "darkMode",
+          document.body.classList.contains("dark")
+        );
+      }
+
+      function toggleBalls() {
+        const enabled = document.getElementById("ballsToggle").checked;
+        localStorage.setItem("ballsEnabled", enabled);
+        document.getElementById("ballContainer").style.display = enabled
+          ? "block"
+          : "none";
+      }
+
+      function toggleSentDots() {
+        const enabled = document.getElementById("sentDotsToggle").checked;
+        localStorage.setItem("sentDotsEnabled", enabled);
+        if (calendar) calendar.render();
+      }
+
+      function logout() {
+        localStorage.removeItem("loggedInUser");
+        window.location.href = "login.html";
+      }
+
+      // Template Manager Functions
+      function initializeTemplateManager() {
+        const templates = safeParse("scheduleTemplates", {});
+        const templateSelect = document.getElementById("templateSelect");
+
+        templateSelect.innerHTML =
+          '<option value="">Select a template</option>';
+
+        for (const name in templates) {
+          const option = document.createElement("option");
+          option.value = name;
+          option.textContent = name;
+          templateSelect.appendChild(option);
+        }
+
+        populateCreateTemplateDays();
+      }
+
+      function populateCreateTemplateDays() {
+        const days = [
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+          "sunday",
+        ];
+        const container = document.getElementById("createTemplateContent");
+        container.innerHTML = "";
+
+        days.forEach((day) => {
+          const capitalized = day.charAt(0).toUpperCase() + day.slice(1);
+
+          const dayHTML = `
+          <div class="day-row">
+            <div class="day-header">
+              <input type="checkbox" id="${day}-enabled" checked>
+              <label for="${day}-enabled">${capitalized}</label>
+            </div>
+            
+            <div class="shifts-container" id="${day}-shifts">
+              <div class="shift-row">
+                <input type="time" class="shift-time" value="09:45">
+                <input type="time" class="shift-time" value="14:45">
+                <select class="shift-type">
+                  <option value="Open">Open</option>
+                  <option value="Floor">Floor</option>
+                  <option value="Close">Close</option>
+                </select>
+                <button class="button small" onclick="addShift(this)">+</button>
+                <button class="button small delete" onclick="removeShift(this)">-</button>
+              </div>
+            </div>
+          </div>
+        `;
+
+          container.innerHTML += dayHTML;
+        });
+      }
+
+      function openEditTemplateModal() {
+        const templateSelect = document.getElementById("templateSelect");
+        const templateName = templateSelect.value;
+
+        if (!templateName) {
+          alert("Please select a template to edit.");
+          return;
+        }
+
+        const templates = safeParse("scheduleTemplates", {});
+        const template = templates[templateName];
+
+        if (!template) {
+          alert("Template not found.");
+          return;
+        }
+
+        document.getElementById("editTemplateModal").dataset.templateName =
+          templateName;
+
+        document.getElementById(
+          "editTemplateTitle"
+        ).innerHTML = `<i class="fas fa-edit"></i> Edit Template: ${templateName}`;
+
+        // Populate template content
+        const container = document.getElementById("editTemplateContent");
+        container.innerHTML = "";
+
+        const days = [
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+          "sunday",
+        ];
+
+        days.forEach((day) => {
+          const capitalized = day.charAt(0).toUpperCase() + day.slice(1);
+          const dayData = template.days[day] || { enabled: false, shifts: [] };
+
+          let shiftsHTML = "";
+
+          if (dayData.shifts.length > 0) {
+            dayData.shifts.forEach((shift) => {
+              shiftsHTML += `
+              <div class="shift-row">
+                <input type="time" class="shift-time" value="${
+                  shift.startTime
+                }">
+                <input type="time" class="shift-time" value="${shift.endTime}">
+                <select class="shift-type">
+                  <option value="Open" ${
+                    shift.type === "Open" ? "selected" : ""
+                  }>Open</option>
+                  <option value="Floor" ${
+                    shift.type === "Floor" ? "selected" : ""
+                  }>Floor</option>
+                  <option value="Close" ${
+                    shift.type === "Close" ? "selected" : ""
+                  }>Close</option>
+                </select>
+                <button class="button small" onclick="addShift(this)">+</button>
+                <button class="button small delete" onclick="removeShift(this)">-</button>
+              </div>
+            `;
+            });
+          } else {
+            shiftsHTML = `
+            <div class="shift-row">
+              <input type="time" class="shift-time" value="09:45">
+              <input type="time" class="shift-time" value="14:45">
+              <select class="shift-type">
+                <option value="Open">Open</option>
+                <option value="Floor">Floor</option>
+                <option value="Close">Close</option>
+              </select>
+              <button class="button small" onclick="addShift(this)">+</button>
+              <button class="button small delete" onclick="removeShift(this)">-</button>
+            </div>
+          `;
+          }
+
+          const dayHTML = `
+          <div class="day-row">
+            <div class="day-header">
+              <input type="checkbox" id="edit-${day}-enabled" ${
+            dayData.enabled ? "checked" : ""
+          }>
+              <label for="edit-${day}-enabled">${capitalized}</label>
+            </div>
+            
+            <div class="shifts-container" id="edit-${day}-shifts">
+              ${shiftsHTML}
+            </div>
+          </div>
+        `;
+
+          container.innerHTML += dayHTML;
+        });
+
+        showModal("editTemplateModal");
+      }
+
+      function saveTemplate() {
+        const templateName = document
+          .getElementById("templateName")
+          .value.trim();
+
+        if (!templateName) {
+          showErrorMessage("Please enter a template name");
+          return;
+        }
+
+        const templates = safeParse("scheduleTemplates", {});
+
+        if (templates[templateName]) {
+          showErrorMessage("Template name already exists");
+          return;
+        }
+
+        // Create new template
+        const template = { name: templateName, days: {} };
+        const days = [
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+          "sunday",
+        ];
+
+        days.forEach((day) => {
+          const enabled = document.getElementById(`${day}-enabled`).checked;
+          const shifts = [];
+
+          const shiftContainer = document.getElementById(`${day}-shifts`);
+          const shiftRows = shiftContainer.querySelectorAll(".shift-row");
+
+          shiftRows.forEach((row) => {
+            const times = row.querySelectorAll(".shift-time");
+            const typeSelect = row.querySelector(".shift-type");
+
+            shifts.push({
+              startTime: times[0].value,
+              endTime: times[1].value,
+              type: typeSelect.value,
+            });
+          });
+
+          template.days[day] = { enabled, shifts };
+        });
+
+        // Save template
+        templates[templateName] = template;
+        localStorage.setItem("scheduleTemplates", JSON.stringify(templates));
+
+        // Update UI
+        initializeTemplateManager();
+        hideModal("createTemplateModal");
+        showSuccessMessage("Template saved successfully!");
+      }
+
+      function saveTemplateChanges() {
+        const templateTitle =
+          document.getElementById("editTemplateTitle").textContent;
+        const templateName =
+          document.getElementById("editTemplateModal").dataset.templateName;
+
+        if (!templateName) {
+          showErrorMessage("Error: Template not found");
+          return;
+        }
+
+        const templates = safeParse("scheduleTemplates", {});
+        const template = templates[templateName];
+
+        if (!template) {
+          showErrorMessage("Template not found");
+          return;
+        }
+
+        // Update template
+        const days = [
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+          "sunday",
+        ];
+
+        days.forEach((day) => {
+          const enabled = document.getElementById(
+            `edit-${day}-enabled`
+          ).checked;
+          const shifts = [];
+
+          const shiftContainer = document.getElementById(`edit-${day}-shifts`);
+          const shiftRows = shiftContainer.querySelectorAll(".shift-row");
+
+          shiftRows.forEach((row) => {
+            const times = row.querySelectorAll(".shift-time");
+            const typeSelect = row.querySelector(".shift-type");
+
+            shifts.push({
+              startTime: times[0].value,
+              endTime: times[1].value,
+              type: typeSelect.value,
+            });
+          });
+
+          template.days[day] = { enabled, shifts };
+        });
+
+        // Save template
+        templates[templateName] = template;
+        localStorage.setItem("scheduleTemplates", JSON.stringify(templates));
+
+        // Update UI
+        initializeTemplateManager();
+        hideModal("editTemplateModal");
+        showSuccessMessage("Template updated successfully!");
+      }
+
+      function loadTemplate() {
+        const templateSelect = document.getElementById("templateSelect");
+        const templateName = templateSelect.value;
+
+        if (!templateName) {
+          showErrorMessage("Please select a template");
+          return;
+        }
+
+        localStorage.setItem("selectedTemplate", templateName);
+        hideModal("templateManagerModal");
+        showSuccessMessage("Template selected for schedule generation!");
+      }
+
+      function deleteTemplate() {
+        const templateSelect = document.getElementById("templateSelect");
+        const templateName = templateSelect.value;
+
+        if (!templateName) {
+          showErrorMessage("Please select a template to delete");
+          return;
+        }
+
+        if (
+          !confirm(
+            `Are you sure you want to delete the "${templateName}" template?`
+          )
+        ) {
+          return;
+        }
+
+        const templates = safeParse("scheduleTemplates", {});
+        delete templates[templateName];
+        localStorage.setItem("scheduleTemplates", JSON.stringify(templates));
+
+        // Clear selected template if it was this one
+        if (localStorage.getItem("selectedTemplate") === templateName) {
+          localStorage.removeItem("selectedTemplate");
+        }
+
+        // Update UI
+        initializeTemplateManager();
+        hideModal("templateManagerModal");
+        showSuccessMessage("Template deleted successfully!");
+      }
+
+      // Shift row management
+      function addShift(btn) {
+        const shiftRow = btn.closest(".shift-row");
+        const newRow = shiftRow.cloneNode(true);
+
+        const timeInputs = newRow.querySelectorAll("input");
+        timeInputs[0].value = "09:45";
+        timeInputs[1].value = "14:45";
+        newRow.querySelector("select").value = "Open";
+
+        shiftRow.parentNode.appendChild(newRow);
+      }
+
+      function removeShift(btn) {
+        const shiftRow = btn.closest(".shift-row");
+        const container = shiftRow.parentNode;
+
+        if (container.querySelectorAll(".shift-row").length > 1) {
+          shiftRow.remove();
+        } else {
+          showErrorMessage("Each day must have at least one shift");
+        }
+      }
+
+      function sendScheduleToWhatsApp() {
+        const range = getActiveScheduleRange();
+        const events = getEventsForScheduleExport();
+        void markDatesAsSentFromEvents(events).catch((err) =>
+          console.error(err)
+        );
+
+        const periodStart = new Date(range.start);
+        const periodEnd = new Date(range.end);
+        const rangeEndLabel = new Date(periodEnd.getTime() - 86400000);
+        const rangeTitle =
+          periodStart.toDateString() === rangeEndLabel.toDateString()
+            ? periodStart.toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })
+            : `${periodStart.toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })} – ${rangeEndLabel.toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}`;
+
+        let message = `*CrewPilot Schedule* (${rangeTitle})\n\n`;
+
+        if (events.length === 0) {
+          message += "No shifts scheduled for this period.";
+        } else {
+          const shiftsByEmployee = {};
+
+          events.forEach((event) => {
+            const name = getEmployeeNameById(event.employeeId);
+            if (!name) return;
+            const shiftType = event.shiftType;
+            const duration = ((event.end - event.start) / (1000 * 60 * 60)).toFixed(
+              1
+            );
+            const shiftDetails = `${shiftType} - ${duration}h`;
+
+            if (!shiftsByEmployee[name]) {
+              shiftsByEmployee[name] = [];
+            }
+
+            const date = event.start.toLocaleDateString("en-US", {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+            });
+
+            const time = `${event.start.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}-${event.end.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}`;
+
+            shiftsByEmployee[name].push({
+              start: event.start,
+              date,
+              time,
+              details: shiftDetails,
+            });
+          });
+
+          const sortedEmployees = Object.keys(shiftsByEmployee).sort();
+
+          sortedEmployees.forEach((name) => {
+            const shifts = shiftsByEmployee[name];
+
+            shifts.sort((a, b) => a.start - b.start);
+
+            message += `*${name}:*\n`;
+
+            shifts.forEach((shift) => {
+              message += `  - ${shift.date}: ${shift.time} (${shift.details})\n`;
+            });
+
+            message += "\n";
+          });
+        }
+
+        const encoded = encodeURIComponent(message);
+        const url = `https://wa.me/?text=${encoded}`;
+        window.open(url, "_blank");
+
+        selectedDates = [];
+        selectedDays.clear();
+        if (calendar) {
+          calendar.unselect();
+          calendar.getEvents().forEach((event) => {
+            event.setProp("borderColor", "");
+            event.setProp("borderWidth", "");
+          });
+          calendar.render();
+        }
+        updateScheduleExportSummaryLabel();
+      }
+
+      async function sendImageScheduleToWhatsApp() {
+        const wasDark = localStorage.getItem("darkMode") === "true";
+        document.body.classList.remove("dark");
+        await new Promise((r) => setTimeout(r, 100));
+
+        const container = document.getElementById("imagePagesContainer");
+        try {
+          const events = getEventsForScheduleExport().sort(
+            (a, b) => a.start - b.start
+          );
+          container.innerHTML = "";
+          container.style.display = "block";
+          container.style.backgroundColor = "#ffffff";
+          container.style.color = "#111827";
+
+          const chunkSize = 10;
+          const chunks = [];
+          for (let i = 0; i < events.length; i += chunkSize) {
+            chunks.push(events.slice(i, i + chunkSize));
+          }
+
+          chunks.forEach((chunk) => {
+            const page = document.createElement("div");
+            page.style.display = "inline-block";
+            page.style.width = "fit-content";
+            page.style.height = "fit-content";
+            page.style.boxSizing = "border-box";
+            page.style.fontSize = "14px";
+            page.style.fontFamily = "Arial, sans-serif";
+            page.style.padding = "0";
+            page.style.margin = "0";
+            page.style.backgroundColor = "#ffffff";
+            page.style.color = "#111827";
+
+            page.innerHTML = `
+      <table style="border-collapse: collapse; font-size: 14px; color: #111827; background: #ffffff;" border="1">
+        <thead>
+          <tr style="background: #e2e8f0; color: #111827;">
+            <th style="padding: 4px 8px;">DATE</th>
+            <th style="padding: 4px 8px;">TIME</th>
+            <th style="padding: 4px 8px;">STAFF</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${chunk
+            .map((event) => {
+              const date = event.start.toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+              });
+              const start = event.start.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+              const end = event.end.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+
+              const staff = getEmployeeNameById(event.employeeId);
+
+              return `
+              <tr style="color: #111827; background: #ffffff;">
+                <td style="padding: 4px 8px;">${date}</td>
+                <td style="padding: 4px 8px;">${start}–${end}</td>
+                <td style="padding: 4px 8px;">${staff}</td>
+              </tr>`;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    `;
+            container.appendChild(page);
+          });
+
+          const pages = Array.from(container.children);
+          const openTab = window.open("", "_blank");
+          openTab.document.write(
+            "<h3 style='font-family:Arial;color:#111827;'>Schedule Images:</h3>"
+          );
+
+          let index = 0;
+
+          await new Promise((resolve) => {
+            function captureNextPage() {
+              if (index >= pages.length) {
+                container.style.display = "none";
+                container.style.backgroundColor = "";
+                container.style.color = "";
+                void markDatesAsSentFromEvents(events).catch((err) =>
+          console.error(err)
+        );
+                selectedDates = [];
+                selectedDays.clear();
+                if (calendar) {
+                  calendar.unselect();
+                  calendar.getEvents().forEach((event) => {
+                    event.setProp("borderColor", "");
+                    event.setProp("borderWidth", "");
+                  });
+                  calendar.render();
+                }
+                updateScheduleExportSummaryLabel();
+                resolve();
+                return;
+              }
+
+              setTimeout(() => {
+                html2canvas(pages[index], {
+                  backgroundColor: "#ffffff",
+                  useCORS: true,
+                  scale: 2,
+                  scrollX: 0,
+                  scrollY: 0,
+                  windowWidth: pages[index].scrollWidth,
+                  windowHeight: pages[index].scrollHeight,
+                }).then((canvas) => {
+                  const img = canvas.toDataURL("image/png");
+                  openTab.document.write(
+                    `<img src="${img}" style="display:block; margin: 0 auto 20px auto;" /><hr/>`
+                  );
+                  index++;
+                  captureNextPage();
+                });
+              }, 150);
+            }
+
+            setTimeout(() => captureNextPage(), 200);
+          });
+        } finally {
+          if (wasDark) document.body.classList.add("dark");
+        }
+      }
+      function removeReassignModal() {
+        const modal = document.getElementById("reassignModal");
+        if (modal) modal.remove();
+      }
+    </script>
+  </body>
+</html>

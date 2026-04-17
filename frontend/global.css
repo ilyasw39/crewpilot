@@ -1,0 +1,92 @@
+:root {
+  --ui-ease-fast: 0.15s ease;
+  --ui-ease: 0.2s ease;
+  --card-radius: 16px;
+  --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+}
+
+* {
+  transition: all var(--ui-ease);
+}
+
+button,
+a {
+  transition: transform var(--ui-ease-fast), box-shadow var(--ui-ease-fast);
+}
+
+button:hover {
+  transform: translateY(-2px) scale(1.02);
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+body {
+  background: radial-gradient(circle at top left, #eef2ff, #ffffff);
+}
+
+body.dark {
+  background: radial-gradient(circle at top left, #1e1e2f, #0f172a);
+}
+
+/* Remove legacy rigid grid background layer */
+body::before {
+  display: none !important;
+  background-image: none !important;
+}
+
+/* De-emphasize decorative floating circles for cleaner SaaS look */
+.ball-decoration,
+#ballContainer {
+  display: none !important;
+}
+
+header {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.7) !important;
+}
+
+body.dark header {
+  background: rgba(30, 30, 47, 0.7) !important;
+}
+
+.card,
+.login-container,
+.weekly-hours,
+.swap-box,
+.keyboard-shortcuts,
+.settings-panel,
+.modal-content {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+}
+
+body.dark .card,
+body.dark .login-container,
+body.dark .weekly-hours,
+body.dark .swap-box,
+body.dark .keyboard-shortcuts,
+body.dark .settings-panel,
+body.dark .modal-content {
+  background: rgba(30, 30, 47, 0.7);
+}
+
+.fade-in {
+  animation: fadeIn 0.4s ease forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
