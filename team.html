@@ -676,9 +676,14 @@
       </div>
 
       <div class="employee-list">
-        <h4 id="employeeCountHeading">
-          Employees <span class="visible-rows-count">(0/0)</span>
-        </h4>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h4 id="employeeCountHeading" style="margin:0;">
+            Employees <span class="visible-rows-count">(0/0)</span>
+          </h4>
+        
+          <button class="button" onclick="openAddPopup()" id="addEmployeeBtn">            <i class="fas fa-plus"></i> Add Employee
+          </button>
+        </div>
         <table id="employeeTable">
           <thead>
             <tr>
@@ -877,6 +882,10 @@
 
         if (currentUser && !currentUser.role) currentUser.role = "employee";
         if (currentUser) currentUser.role = normalizeRole(currentUser.role);
+
+        if (currentUser && currentUser.role !== "owner") {
+          document.getElementById("addEmployeeBtn").style.display = "none";
+        }
 
         await Promise.all([loadEmployees(), loadShifts()]);
 
