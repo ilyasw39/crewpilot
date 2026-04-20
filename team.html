@@ -883,10 +883,6 @@
         if (currentUser && !currentUser.role) currentUser.role = "employee";
         if (currentUser) currentUser.role = normalizeRole(currentUser.role);
 
-        if (currentUser && currentUser.role !== "owner") {
-          document.getElementById("addEmployeeBtn").style.display = "none";
-        }
-
         await Promise.all([loadEmployees(), loadShifts()]);
 
         // Initialize theme settings

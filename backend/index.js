@@ -6,22 +6,38 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-function mockAuth(req, res, next) {
-  // TEMP: replace with real JWT/session auth later
-  req.user = {
-    id: 1,
-    storeId: 1,
-    role: "owner",
-  };
-  next();
-}
-
 const db = mysql.createConnection({
   host: "localhost",
   user: "root",
   password: "YOUR_PASSWORD",
   database: "crewpilot",
 });
+const dbp = db.promise();
+
+async function mockAuth(req, res, next) {
+  const userId = 1; // TEMP (Jess)
+  try {
+    const [rows] = await dbp.execute(
+      "SELECT store_id, role FROM store_members WHERE user_id = ? LIMIT 1",
+      [userId]
+    );
+    req.user = {
+      id: userId,
+      storeId: rows[0]?.store_id || null,
+      role: rows[0]?.role || null,
+    };
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+function requireStore(req, res, next) {
+  if (!req.user || !req.user.storeId) {
+    return res.status(403).json({ error: "No store linked to current user" });
+  }
+  next();
+}
 
 db.connect((err) => {
   if (err) {
@@ -29,6 +45,29 @@ db.connect((err) => {
     return;
   }
   console.log("Connected to MySQL");
+  db.query(
+    `CREATE TABLE IF NOT EXISTS stores (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(255) NOT NULL
+    )`,
+    (storesErr) => {
+      if (storesErr) console.error("Could not ensure stores table:", storesErr);
+    }
+  );
+  db.query(
+    `CREATE TABLE IF NOT EXISTS store_members (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      store_id INT NOT NULL,
+      role VARCHAR(50) NOT NULL,
+      UNIQUE KEY uq_user_store (user_id, store_id)
+    )`,
+    (membersErr) => {
+      if (membersErr) {
+        console.error("Could not ensure store_members table:", membersErr);
+      }
+    }
+  );
   db.query(
     "ALTER TABLE employees ADD COLUMN IF NOT EXISTS store_id INT NULL",
     (alterErr) => {
@@ -68,11 +107,62 @@ app.post("/login", (req, res) => {
 
 app.use("/me", mockAuth);
 
+app.get("/me/store", async (req, res) => {
+  try {
+    const [rows] = await dbp.execute(
+      "SELECT store_id, role FROM store_members WHERE user_id = ? LIMIT 1",
+      [req.user.id]
+    );
+
+    if (rows.length === 0) {
+      return res.json(null);
+    }
+
+    return res.json(rows[0]);
+  } catch (err) {
+    return res.status(500).send(err.message);
+  }
+});
+
+app.post("/me/store", async (req, res) => {
+  const { name } = req.body || {};
+  const cleanName = String(name || "").trim();
+  if (!cleanName) {
+    return res.status(400).send("Store name is required");
+  }
+
+  try {
+    const [existing] = await dbp.execute(
+      "SELECT store_id FROM store_members WHERE user_id = ? LIMIT 1",
+      [req.user.id]
+    );
+    if (existing.length > 0) {
+      return res.status(409).json({ storeId: existing[0].store_id });
+    }
+
+    const [storeResult] = await dbp.execute(
+      "INSERT INTO stores (name) VALUES (?)",
+      [cleanName]
+    );
+    const storeId = storeResult.insertId;
+
+    await dbp.execute(
+      "INSERT INTO store_members (user_id, store_id, role) VALUES (?, ?, 'owner')",
+      [req.user.id, storeId]
+    );
+
+    return res.json({ storeId });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).send(err.message);
+  }
+});
+
 
 // =========================
 // EMPLOYEES
 // =========================
-app.get("/me/employees", (req, res) => {
+app.get("/me/employees", requireStore, (req, res) => {
   db.query("SELECT * FROM employees WHERE store_id = ?", [req.user.storeId], (err, rows) => {
     if (err) return res.status(500).send(err);
 
@@ -85,7 +175,7 @@ app.get("/me/employees", (req, res) => {
   });
 });
 
-app.post("/me/employees", (req, res) => {
+app.post("/me/employees", requireStore, (req, res) => {
   const { name, email, phone, role, availability } = req.body;
 
   db.query(
@@ -105,7 +195,7 @@ app.post("/me/employees", (req, res) => {
   );
 });
 
-app.put("/me/employees/:id", (req, res) => {
+app.put("/me/employees/:id", requireStore, (req, res) => {
   const { name, email, phone, role, availability } = req.body;
 
   db.query(
@@ -127,7 +217,7 @@ app.put("/me/employees/:id", (req, res) => {
   );
 });
 
-app.delete("/me/employees/:id", (req, res) => {
+app.delete("/me/employees/:id", requireStore, (req, res) => {
   db.query(
     "DELETE FROM employees WHERE id=? AND store_id=?",
     [req.params.id, req.user.storeId],

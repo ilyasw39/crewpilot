@@ -427,6 +427,13 @@
       <div class="buttons">
         <a href="schedule.html" class="button">Go to Schedule</a>
         <a href="team.html" class="button">Manage Team</a>
+        <button
+          id="createStoreBtn"
+          class="button"
+          style="display: none"
+        >
+          Create Store
+        </button>
       </div>
     </div>
 
@@ -502,6 +509,19 @@
         }, 1000);
       }
 
+      async function checkStore() {
+        try {
+          const res = await fetch("http://localhost:3000/me/store");
+          if (!res.ok) throw new Error(await res.text());
+          const store = await res.json();
+          const createStoreBtn = document.getElementById("createStoreBtn");
+          createStoreBtn.style.display = store ? "none" : "block";
+        } catch (err) {
+          console.error(err);
+          showErrorMessage("Could not check store membership.");
+        }
+      }
+
       window.onload = function () {
         if (localStorage.getItem("darkMode") === "true") {
           document.body.classList.add("dark");
@@ -524,6 +544,36 @@
           authButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login';
           authButton.onclick = null;
           authButton.setAttribute("href", "login.html");
+        }
+        checkStore();
+      };
+
+      document.getElementById("createStoreBtn").onclick = async () => {
+        const name = prompt("Enter your store name:");
+        if (!name) return;
+
+        try {
+          const res = await fetch("http://localhost:3000/me/store", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ name }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+
+          const data = await res.json();
+          const loggedInUser = JSON.parse(localStorage.getItem("loggedInUser")) || {};
+          localStorage.setItem(
+            "loggedInUser",
+            JSON.stringify({ ...loggedInUser, storeId: data.storeId, role: "owner" })
+          );
+
+          alert("Store created!");
+          location.reload();
+        } catch (err) {
+          console.error(err);
+          showErrorMessage("Failed to create store.");
         }
       };
     </script>

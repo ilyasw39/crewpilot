@@ -2,6 +2,11 @@
 CREATE DATABASE IF NOT EXISTS crewpilot;
 USE crewpilot;
 
+CREATE TABLE IF NOT EXISTS stores (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS employees (
   id INT AUTO_INCREMENT PRIMARY KEY,
   store_id INT NULL,
@@ -25,6 +30,14 @@ CREATE TABLE IF NOT EXISTS users (
 INSERT IGNORE INTO users (username, password, role, employee_id) VALUES
   ('jess', '1212', 'owner', NULL),
   ('donna', '3434', 'owner', NULL);
+
+CREATE TABLE IF NOT EXISTS store_members (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  store_id INT NOT NULL,
+  role VARCHAR(50) NOT NULL,
+  UNIQUE KEY uq_user_store (user_id, store_id)
+);
 
 -- employee_id NULL so ON DELETE SET NULL is valid on employees
 CREATE TABLE IF NOT EXISTS shifts (

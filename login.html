@@ -362,6 +362,12 @@
             />
             <button type="submit">Login</button>
           </form>
+          <button
+            id="createStoreBtn"
+            style="display: none"
+          >
+            Create Store
+          </button>
         </div>
       </main>
     </div>
@@ -424,6 +430,19 @@
           : "none";
       }
 
+      async function checkStore() {
+        try {
+          const res = await fetch(`${API_BASE}/me/store`);
+          if (!res.ok) throw new Error(await res.text());
+          const store = await res.json();
+          const createStoreBtn = document.getElementById("createStoreBtn");
+          createStoreBtn.style.display = store ? "none" : "block";
+        } catch (err) {
+          console.error(err);
+          showErrorMessage("Could not check store membership.");
+        }
+      }
+
       function showSuccessMessage(message) {
         const successDiv = document.createElement("div");
         successDiv.className = "success-message";
@@ -474,6 +493,37 @@
         document.getElementById("ballContainer").style.display = ballsEnabled
           ? "block"
           : "none";
+
+        checkStore();
+      };
+
+      document.getElementById("createStoreBtn").onclick = async () => {
+        const name = prompt("Enter your store name:");
+        if (!name) return;
+
+        try {
+          const res = await fetch(`${API_BASE}/me/store`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ name }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+
+          const data = await res.json();
+          const user = JSON.parse(localStorage.getItem("loggedInUser")) || {};
+          localStorage.setItem(
+            "loggedInUser",
+            JSON.stringify({ ...user, storeId: data.storeId, role: "owner" })
+          );
+
+          alert("Store created!");
+          location.reload();
+        } catch (err) {
+          console.error(err);
+          showErrorMessage("Failed to create store.");
+        }
       };
     </script>
   </body>
