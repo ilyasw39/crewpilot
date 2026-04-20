@@ -70,16 +70,15 @@ function registerMeSubroutes(me) {
   });
 
   me.post("/employees", requireStore, (req, res) => {
-    const { name, email, phone, role, availability } = req.body;
+    const { name, email, phone, availability } = req.body;
 
     db.query(
-      "INSERT INTO employees (store_id, name, email, phone, role, availability) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO employees (store_id, name, email, phone, availability) VALUES (?, ?, ?, ?, ?)",
       [
         req.user.storeId,
         name,
         email,
-        phone,
-        role || "employee",
+        phone || "employee",
         JSON.stringify(availability || {}),
       ],
       (err, result) => {
@@ -90,15 +89,14 @@ function registerMeSubroutes(me) {
   });
 
   me.put("/employees/:id", requireStore, (req, res) => {
-    const { name, email, phone, role, availability } = req.body;
+    const { name, email, phone, availability } = req.body;
 
     db.query(
-      "UPDATE employees SET name=?, email=?, phone=?, role=?, availability=? WHERE id=? AND store_id=?",
+      "UPDATE employees SET name=?, email=?, phone=?, availability=? WHERE id=? AND store_id=?",
       [
         name,
         email,
         phone,
-        role,
         JSON.stringify(availability || {}),
         req.params.id,
         req.user.storeId,
@@ -128,18 +126,25 @@ function registerResourceRoutes(r) {
   r.get("/shifts", (req, res) => {
     db.query("SELECT * FROM shifts ORDER BY start_time ASC", (err, rows) => {
       if (err) return sendError(res, 500, err.message);
-      return sendData(res, rows);
+      const mapped = (rows || []).map((r) => ({
+        ...r,
+        start: r.start_time != null ? r.start_time : r.start,
+        end: r.end_time != null ? r.end_time : r.end,
+      }));
+      return sendData(res, mapped);
     });
   });
 
   r.post("/shifts", (req, res) => {
-    const { employee_id, start, end, type } = req.body;
+    const { employee_id, type } = req.body;
+    const start_time = req.body.start_time ?? req.body.start;
+    const end_time = req.body.end_time ?? req.body.end;
 
     if (!employee_id) return sendError(res, 400, "employee_id required");
 
     db.query(
-      "INSERT INTO shifts (employee_id, start, end, type) VALUES (?, ?, ?, ?)",
-      [employee_id, start, end, type || "Open"],
+      "INSERT INTO shifts (employee_id, start_time, end_time, type) VALUES (?, ?, ?, ?)",
+      [employee_id, start_time, end_time, type || "Open"],
       (err, result) => {
         if (err) return sendError(res, 500, err.message);
         return sendData(res, { id: result.insertId });
@@ -148,11 +153,13 @@ function registerResourceRoutes(r) {
   });
 
   r.put("/shifts/:id", (req, res) => {
-    const { employee_id, start, end, type } = req.body;
+    const { employee_id, type } = req.body;
+    const start_time = req.body.start_time ?? req.body.start;
+    const end_time = req.body.end_time ?? req.body.end;
 
     db.query(
-      "UPDATE shifts SET employee_id=?, start=?, end=?, type=? WHERE id=?",
-      [employee_id, start, end, type || "Open", req.params.id],
+      "UPDATE shifts SET employee_id=?, start_time=?, end_time=?, type=? WHERE id=?",
+      [employee_id, start_time, end_time, type || "Open", req.params.id],
       (err) => {
         if (err) return sendError(res, 500, err.message);
         return sendData(res, { success: true });
@@ -169,7 +176,7 @@ function registerResourceRoutes(r) {
 
   r.get("/shift-pool", (req, res) => {
     db.query(
-      `SELECT sp.*, s.start, s.end, s.type 
+      `SELECT sp.*, s.start_time AS shift_start, s.end_time AS shift_end, s.type AS shift_type
        FROM shift_pool sp
        JOIN shifts s ON sp.shift_id = s.id`,
       (err, rows) => {
@@ -380,8 +387,6 @@ async function loginHandler(req, res) {
       userId: user.id,
       id: user.id,
       username: user.username,
-      role: user.role,
-      employee_id: user.employee_id,
     });
   } catch (err) {
     return sendError(res, 500, "login failed");
