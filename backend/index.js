@@ -423,8 +423,8 @@ async function createStoreHandler(req, res) {
     // 4. return success and token for immediate sign-in
     return sendData(res, { success: true, userId, storeId, token });
   } catch (err) {
-    console.error(err);
-    return sendError(res, 500, "failed to create store");
+    console.error("CREATE STORE ERROR:", err);
+    return sendError(res, 500, err.message);
   }
 }
 
