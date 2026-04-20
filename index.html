@@ -511,7 +511,7 @@
 
       async function checkStore() {
         try {
-          const res = await fetch("http://localhost:3000/me/store");
+          const res = await fetch("https://crewpilot.onrender.com/me/store");
           if (!res.ok) throw new Error(await res.text());
           const store = await res.json();
           const createStoreBtn = document.getElementById("createStoreBtn");
@@ -553,7 +553,7 @@
         if (!name) return;
 
         try {
-          const res = await fetch("http://localhost:3000/me/store", {
+          const res = await fetch("https://crewpilot.onrender.com/me/store", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
