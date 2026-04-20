@@ -812,7 +812,7 @@
         return availability;
       }
 
-      const API_BASE = "/api/v1";
+      const API_BASE = "https://crewpilot.onrender.com/api/v1";
       function getAuthToken() {
         const user = JSON.parse(localStorage.getItem("loggedInUser") || "null");
         return user?.token || null;
