@@ -7,16 +7,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const db = mysql.createConnection({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-});
+const db = mysql.createConnection(process.env.MYSQL_PUBLIC_URL);
 const dbp = db.promise();
 
 async function mockAuth(req, res, next) {
