@@ -143,7 +143,7 @@ function registerResourceRoutes(r) {
     if (!employee_id) return sendError(res, 400, "employee_id required");
 
     db.query(
-      "INSERT INTO shifts (employee_id, start_time, end_time, type) VALUES (?, ?, ?, ?)",
+      "INSERT INTO shifts (employee_id, start_time, end_time, store_id) VALUES (?, ?, ?, ?)",
       [employee_id, start_time, end_time, type || "Open"],
       (err, result) => {
         if (err) return sendError(res, 500, err.message);
