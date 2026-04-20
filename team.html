@@ -812,7 +812,25 @@
         return availability;
       }
 
-      const API_BASE = "https://crewpilot.onrender.com";
+      const API_BASE = "/api/v1";
+      function getAuthToken() {
+        const user = JSON.parse(localStorage.getItem("loggedInUser") || "null");
+        return user?.token || null;
+      }
+      function apiFetch(url, options = {}) {
+        const token = getAuthToken();
+        return fetch(url, {
+          ...options,
+          headers: {
+            ...(options.headers || {}),
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+      }
+      async function parseApiData(res) {
+        const body = await res.json();
+        return body?.data;
+      }
       let employeeList = [];
       let scheduleShiftsCache = [];
       let selectedRow = null;
@@ -843,9 +861,9 @@
 
       async function loadEmployees() {
         try {
-          const res = await fetch(`${API_BASE}/me/employees`);
+          const res = await apiFetch(`${API_BASE}/me/employees`);
           if (!res.ok) throw new Error(await res.text());
-          let employees = await res.json();
+          let employees = await parseApiData(res);
           employeeList = employees.map((emp) => ({
             ...emp,
             isKeyholder: emp.role === "Key Holder",
@@ -864,7 +882,7 @@
         try {
           const res = await fetch(`${API_BASE}/shifts`);
           if (!res.ok) throw new Error(await res.text());
-          scheduleShiftsCache = await res.json();
+          scheduleShiftsCache = await parseApiData(res);
           if (!Array.isArray(scheduleShiftsCache)) scheduleShiftsCache = [];
         } catch (err) {
           console.error(err);
@@ -980,7 +998,7 @@
           const phone = document.getElementById("empPhone").value;
 
           try {
-          const res = await fetch(`${API_BASE}/me/employees`, {
+          const res = await apiFetch(`${API_BASE}/me/employees`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1348,7 +1366,7 @@
           const availability = readAvailabilityFromEditor();
 
           try {
-            const res = await fetch(
+            const res = await apiFetch(
               `${API_BASE}/me/employees/${selectedRow}`,
               {
                 method: "PUT",
@@ -1379,7 +1397,7 @@
           return;
 
         try {
-          const res = await fetch(`${API_BASE}/me/employees/${employee.id}`, {
+          const res = await apiFetch(`${API_BASE}/me/employees/${employee.id}`, {
             method: "DELETE",
           });
           if (!res.ok) throw new Error(await res.text());

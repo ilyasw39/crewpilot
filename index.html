@@ -438,8 +438,27 @@
     </div>
 
     <script>
+      const API_BASE = "/api/v1";
       const darkModeToggle = document.getElementById("darkModeToggle");
       const ballsToggle = document.getElementById("ballsToggle");
+      function getAuthToken() {
+        const user = JSON.parse(localStorage.getItem("loggedInUser") || "null");
+        return user?.token || null;
+      }
+      function apiFetch(url, options = {}) {
+        const token = getAuthToken();
+        return fetch(url, {
+          ...options,
+          headers: {
+            ...(options.headers || {}),
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+      }
+      async function parseApiData(res) {
+        const body = await res.json();
+        return body?.data;
+      }
 
       function toggleSettings() {
         document.getElementById("settingsPanel").classList.toggle("active");
@@ -510,11 +529,15 @@
       }
 
       async function checkStore() {
+        const createStoreBtn = document.getElementById("createStoreBtn");
+        if (!getAuthToken()) {
+          createStoreBtn.style.display = "block";
+          return;
+        }
         try {
-          const res = await fetch("https://crewpilot.onrender.com/me/store");
+          const res = await apiFetch(`${API_BASE}/me/store`);
           if (!res.ok) throw new Error(await res.text());
-          const store = await res.json();
-          const createStoreBtn = document.getElementById("createStoreBtn");
+          const store = await parseApiData(res);
           createStoreBtn.style.display = store ? "none" : "block";
         } catch (err) {
           console.error(err);
@@ -549,32 +572,7 @@
       };
 
       document.getElementById("createStoreBtn").onclick = async () => {
-        const name = prompt("Enter your store name:");
-        if (!name) return;
-
-        try {
-          const res = await fetch("https://crewpilot.onrender.com/me/store", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ name }),
-          });
-          if (!res.ok) throw new Error(await res.text());
-
-          const data = await res.json();
-          const loggedInUser = JSON.parse(localStorage.getItem("loggedInUser")) || {};
-          localStorage.setItem(
-            "loggedInUser",
-            JSON.stringify({ ...loggedInUser, storeId: data.storeId, role: "owner" })
-          );
-
-          alert("Store created!");
-          location.reload();
-        } catch (err) {
-          console.error(err);
-          showErrorMessage("Failed to create store.");
-        }
+        window.location.href = "login.html";
       };
     </script>
   </body>
