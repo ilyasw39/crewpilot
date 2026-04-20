@@ -27,15 +27,241 @@ if (!JWT_SECRET) {
 }
 const sendData = (res, data, status = 200) => res.status(status).json({ data });
 const sendError = (res, status, message) => res.status(status).json({ error: message });
-const API_PREFIX = "/api/v1";
-function registerRoute(method, path, ...handlers) {
-  app[method](path, ...handlers);
-  app[method](`${API_PREFIX}${path}`, ...handlers);
+
+const v1Router = express.Router();
+
+function registerMeSubroutes(me) {
+  me.get("/", (req, res) => {
+    return sendData(res, {
+      id: req.user.id,
+      storeId: req.user.storeId,
+      role: req.user.role,
+    });
+  });
+
+  me.get("/store", async (req, res) => {
+    try {
+      const [rows] = await dbp.execute(
+        "SELECT store_id, role FROM store_members WHERE user_id = ? LIMIT 1",
+        [req.user.id]
+      );
+
+      if (rows.length === 0) {
+        return sendData(res, null);
+      }
+
+      return sendData(res, rows[0]);
+    } catch (err) {
+      return sendError(res, 500, err.message);
+    }
+  });
+
+  me.get("/employees", requireStore, (req, res) => {
+    db.query("SELECT * FROM employees WHERE store_id = ?", [req.user.storeId], (err, rows) => {
+      if (err) return sendError(res, 500, err.message);
+
+      const parsed = rows.map((r) => ({
+        ...r,
+        availability: r.availability ? JSON.parse(r.availability) : null,
+      }));
+
+      return sendData(res, parsed);
+    });
+  });
+
+  me.post("/employees", requireStore, (req, res) => {
+    const { name, email, phone, role, availability } = req.body;
+
+    db.query(
+      "INSERT INTO employees (store_id, name, email, phone, role, availability) VALUES (?, ?, ?, ?, ?, ?)",
+      [
+        req.user.storeId,
+        name,
+        email,
+        phone,
+        role || "employee",
+        JSON.stringify(availability || {}),
+      ],
+      (err, result) => {
+        if (err) return sendError(res, 500, err.message);
+        return sendData(res, { id: result.insertId });
+      }
+    );
+  });
+
+  me.put("/employees/:id", requireStore, (req, res) => {
+    const { name, email, phone, role, availability } = req.body;
+
+    db.query(
+      "UPDATE employees SET name=?, email=?, phone=?, role=?, availability=? WHERE id=? AND store_id=?",
+      [
+        name,
+        email,
+        phone,
+        role,
+        JSON.stringify(availability || {}),
+        req.params.id,
+        req.user.storeId,
+      ],
+      (err, result) => {
+        if (err) return sendError(res, 500, err.message);
+        if (!result.affectedRows) return sendError(res, 404, "Employee not found");
+        return sendData(res, { success: true });
+      }
+    );
+  });
+
+  me.delete("/employees/:id", requireStore, (req, res) => {
+    db.query(
+      "DELETE FROM employees WHERE id=? AND store_id=?",
+      [req.params.id, req.user.storeId],
+      (err, result) => {
+        if (err) return sendError(res, 500, err.message);
+        if (!result.affectedRows) return sendError(res, 404, "Employee not found");
+        return sendData(res, { success: true });
+      }
+    );
+  });
 }
-function registerRouteAliases(method, paths, ...handlers) {
-  paths.forEach((path) => {
-    app[method](path, ...handlers);
-    app[method](`${API_PREFIX}${path}`, ...handlers);
+
+function registerResourceRoutes(r) {
+  r.get("/shifts", (req, res) => {
+    db.query("SELECT * FROM shifts ORDER BY start ASC", (err, rows) => {
+      if (err) return sendError(res, 500, err.message);
+      return sendData(res, rows);
+    });
+  });
+
+  r.post("/shifts", (req, res) => {
+    const { employee_id, start, end, type } = req.body;
+
+    if (!employee_id) return sendError(res, 400, "employee_id required");
+
+    db.query(
+      "INSERT INTO shifts (employee_id, start, end, type) VALUES (?, ?, ?, ?)",
+      [employee_id, start, end, type || "Open"],
+      (err, result) => {
+        if (err) return sendError(res, 500, err.message);
+        return sendData(res, { id: result.insertId });
+      }
+    );
+  });
+
+  r.put("/shifts/:id", (req, res) => {
+    const { employee_id, start, end, type } = req.body;
+
+    db.query(
+      "UPDATE shifts SET employee_id=?, start=?, end=?, type=? WHERE id=?",
+      [employee_id, start, end, type || "Open", req.params.id],
+      (err) => {
+        if (err) return sendError(res, 500, err.message);
+        return sendData(res, { success: true });
+      }
+    );
+  });
+
+  r.delete("/shifts/:id", (req, res) => {
+    db.query("DELETE FROM shifts WHERE id=?", [req.params.id], (err) => {
+      if (err) return sendError(res, 500, err.message);
+      return sendData(res, { success: true });
+    });
+  });
+
+  r.get("/shift-pool", (req, res) => {
+    db.query(
+      `SELECT sp.*, s.start, s.end, s.type 
+       FROM shift_pool sp
+       JOIN shifts s ON sp.shift_id = s.id`,
+      (err, rows) => {
+        if (err) return sendError(res, 500, err.message);
+        return sendData(res, rows);
+      }
+    );
+  });
+
+  r.post("/shift-pool", (req, res) => {
+    const { shift_id, created_by } = req.body;
+
+    if (!shift_id) return sendError(res, 400, "shift_id required");
+
+    db.query(
+      "INSERT INTO shift_pool (shift_id, created_by, status) VALUES (?, ?, 'open')",
+      [shift_id, created_by || null],
+      (err, result) => {
+        if (err) return sendError(res, 500, err.message);
+        return sendData(res, { id: result.insertId });
+      }
+    );
+  });
+
+  r.put("/shift-pool/:id", (req, res) => {
+    const { requested_by, status } = req.body;
+
+    db.query(
+      "UPDATE shift_pool SET requested_by=?, status=? WHERE id=?",
+      [requested_by || null, status, req.params.id],
+      (err) => {
+        if (err) return sendError(res, 500, err.message);
+
+        if (status === "approved" && requested_by) {
+          db.query(
+            `UPDATE shifts 
+             SET employee_id=? 
+             WHERE id = (SELECT shift_id FROM shift_pool WHERE id=?)`,
+            [requested_by, req.params.id],
+            (err2) => {
+              if (err2) return sendError(res, 500, err2.message);
+              return sendData(res, { success: true });
+            }
+          );
+        } else {
+          return sendData(res, { success: true });
+        }
+      }
+    );
+  });
+
+  r.delete("/shift-pool/:id", (req, res) => {
+    db.query("DELETE FROM shift_pool WHERE id=?", [req.params.id], (err) => {
+      if (err) return sendError(res, 500, err.message);
+      return sendData(res, { success: true });
+    });
+  });
+
+  r.get("/sent-days", (req, res) => {
+    db.query("SELECT date FROM sent_days", (err, rows) => {
+      if (err) return sendError(res, 500, err.message);
+
+      const dates = rows.map((r) =>
+        r.date instanceof Date
+          ? r.date.toISOString().slice(0, 10)
+          : r.date
+      );
+
+      return sendData(res, dates);
+    });
+  });
+
+  r.post("/sent-days", (req, res) => {
+    const { date, sent_by } = req.body;
+
+    if (!date) return sendError(res, 400, "date required");
+
+    db.query(
+      "INSERT INTO sent_days (date, sent_by) VALUES (?, ?) ON DUPLICATE KEY UPDATE sent_by=VALUES(sent_by)",
+      [date, sent_by || null],
+      (err) => {
+        if (err) return sendError(res, 500, err.message);
+        return sendData(res, { success: true });
+      }
+    );
+  });
+
+  r.delete("/sent-days/:date", (req, res) => {
+    db.query("DELETE FROM sent_days WHERE date=?", [req.params.date], (err) => {
+      if (err) return sendError(res, 500, err.message);
+      return sendData(res, { success: true });
+    });
   });
 }
 
@@ -202,273 +428,37 @@ async function createStoreHandler(req, res) {
   }
 }
 
-registerRouteAliases("post", ["/auth/login", "/login"], loginHandler);
-registerRouteAliases(
-  "post",
-  ["/auth/register", "/create-store"],
-  createStoreHandler
-);
+// =========================
+// API v1 (mounted router)
+// =========================
+v1Router.post("/auth/login", loginHandler);
+v1Router.post("/auth/register", createStoreHandler);
+v1Router.get("/health", (req, res) => sendData(res, { status: "ok" }));
 
-app.use("/me", auth);
-app.use(`${API_PREFIX}/me`, auth);
+const meV1 = express.Router();
+meV1.use(auth);
+registerMeSubroutes(meV1);
+v1Router.use("/me", meV1);
 
-registerRoute("get", "/me", (req, res) => {
-  return sendData(res, {
-    id: req.user.id,
-    storeId: req.user.storeId,
-    role: req.user.role,
-  });
-});
+registerResourceRoutes(v1Router);
 
-registerRoute("get", "/health", (req, res) => {
-  return sendData(res, { status: "ok" });
-});
-
-registerRoute("get", "/me/store", async (req, res) => {
-  try {
-    const [rows] = await dbp.execute(
-      "SELECT store_id, role FROM store_members WHERE user_id = ? LIMIT 1",
-      [req.user.id]
-    );
-
-    if (rows.length === 0) {
-      return sendData(res, null);
-    }
-
-    return sendData(res, rows[0]);
-  } catch (err) {
-    return sendError(res, 500, err.message);
-  }
-});
-
+app.use("/api/v1", v1Router);
 
 // =========================
-// EMPLOYEES
+// Legacy (non-versioned) aliases
 // =========================
-registerRoute("get", "/me/employees", requireStore, (req, res) => {
-  db.query("SELECT * FROM employees WHERE store_id = ?", [req.user.storeId], (err, rows) => {
-    if (err) return sendError(res, 500, err.message);
+app.post("/login", loginHandler);
+app.post("/create-store", createStoreHandler);
+app.post("/auth/login", loginHandler);
+app.post("/auth/register", createStoreHandler);
+app.get("/health", (req, res) => sendData(res, { status: "ok" }));
 
-    const parsed = rows.map((r) => ({
-      ...r,
-      availability: r.availability ? JSON.parse(r.availability) : null,
-    }));
+const meLegacy = express.Router();
+meLegacy.use(auth);
+registerMeSubroutes(meLegacy);
+app.use("/me", meLegacy);
 
-    return sendData(res, parsed);
-  });
-});
-
-registerRoute("post", "/me/employees", requireStore, (req, res) => {
-  const { name, email, phone, role, availability } = req.body;
-
-  db.query(
-    "INSERT INTO employees (store_id, name, email, phone, role, availability) VALUES (?, ?, ?, ?, ?, ?)",
-    [
-      req.user.storeId,
-      name,
-      email,
-      phone,
-      role || "employee",
-      JSON.stringify(availability || {}),
-    ],
-    (err, result) => {
-      if (err) return sendError(res, 500, err.message);
-      return sendData(res, { id: result.insertId });
-    }
-  );
-});
-
-registerRoute("put", "/me/employees/:id", requireStore, (req, res) => {
-  const { name, email, phone, role, availability } = req.body;
-
-  db.query(
-    "UPDATE employees SET name=?, email=?, phone=?, role=?, availability=? WHERE id=? AND store_id=?",
-    [
-      name,
-      email,
-      phone,
-      role,
-      JSON.stringify(availability || {}),
-      req.params.id,
-      req.user.storeId,
-    ],
-    (err, result) => {
-      if (err) return sendError(res, 500, err.message);
-      if (!result.affectedRows) return sendError(res, 404, "Employee not found");
-      return sendData(res, { success: true });
-    }
-  );
-});
-
-registerRoute("delete", "/me/employees/:id", requireStore, (req, res) => {
-  db.query(
-    "DELETE FROM employees WHERE id=? AND store_id=?",
-    [req.params.id, req.user.storeId],
-    (err, result) => {
-    if (err) return sendError(res, 500, err.message);
-    if (!result.affectedRows) return sendError(res, 404, "Employee not found");
-    return sendData(res, { success: true });
-    }
-  );
-});
-
-
-// =========================
-// SHIFTS
-// =========================
-registerRoute("get", "/shifts", (req, res) => {
-  db.query("SELECT * FROM shifts ORDER BY start ASC", (err, rows) => {
-    if (err) return sendError(res, 500, err.message);
-    return sendData(res, rows);
-  });
-});
-
-registerRoute("post", "/shifts", (req, res) => {
-  const { employee_id, start, end, type } = req.body;
-
-  if (!employee_id) return sendError(res, 400, "employee_id required");
-
-  db.query(
-    "INSERT INTO shifts (employee_id, start, end, type) VALUES (?, ?, ?, ?)",
-    [employee_id, start, end, type || "Open"],
-    (err, result) => {
-      if (err) return sendError(res, 500, err.message);
-      return sendData(res, { id: result.insertId });
-    }
-  );
-});
-
-registerRoute("put", "/shifts/:id", (req, res) => {
-  const { employee_id, start, end, type } = req.body;
-
-  db.query(
-    "UPDATE shifts SET employee_id=?, start=?, end=?, type=? WHERE id=?",
-    [employee_id, start, end, type || "Open", req.params.id],
-    (err) => {
-      if (err) return sendError(res, 500, err.message);
-      return sendData(res, { success: true });
-    }
-  );
-});
-
-registerRoute("delete", "/shifts/:id", (req, res) => {
-  db.query("DELETE FROM shifts WHERE id=?", [req.params.id], (err) => {
-    if (err) return sendError(res, 500, err.message);
-    return sendData(res, { success: true });
-  });
-});
-
-
-// =========================
-// SHIFT POOL (SWAPS)
-// =========================
-registerRoute("get", "/shift-pool", (req, res) => {
-  db.query(
-    `SELECT sp.*, s.start, s.end, s.type 
-     FROM shift_pool sp
-     JOIN shifts s ON sp.shift_id = s.id`,
-    (err, rows) => {
-      if (err) return sendError(res, 500, err.message);
-      return sendData(res, rows);
-    }
-  );
-});
-
-
-// Offer shift
-registerRoute("post", "/shift-pool", (req, res) => {
-  const { shift_id, created_by } = req.body;
-
-  if (!shift_id) return sendError(res, 400, "shift_id required");
-
-  db.query(
-    "INSERT INTO shift_pool (shift_id, created_by, status) VALUES (?, ?, 'open')",
-    [shift_id, created_by || null],
-    (err, result) => {
-      if (err) return sendError(res, 500, err.message);
-      return sendData(res, { id: result.insertId });
-    }
-  );
-});
-
-
-// Take / approve / reject
-registerRoute("put", "/shift-pool/:id", (req, res) => {
-  const { requested_by, status } = req.body;
-
-  db.query(
-    "UPDATE shift_pool SET requested_by=?, status=? WHERE id=?",
-    [requested_by || null, status, req.params.id],
-    (err) => {
-      if (err) return sendError(res, 500, err.message);
-
-      // 🔥 IMPORTANT: update shift when approved
-      if (status === "approved" && requested_by) {
-        db.query(
-          `UPDATE shifts 
-           SET employee_id=? 
-           WHERE id = (SELECT shift_id FROM shift_pool WHERE id=?)`,
-          [requested_by, req.params.id],
-          (err2) => {
-            if (err2) return sendError(res, 500, err2.message);
-            return sendData(res, { success: true });
-          }
-        );
-      } else {
-        return sendData(res, { success: true });
-      }
-    }
-  );
-});
-
-
-// Remove from pool
-registerRoute("delete", "/shift-pool/:id", (req, res) => {
-  db.query("DELETE FROM shift_pool WHERE id=?", [req.params.id], (err) => {
-    if (err) return sendError(res, 500, err.message);
-    return sendData(res, { success: true });
-  });
-});
-
-
-// =========================
-// SENT DAYS (GREEN DOTS)
-// =========================
-registerRoute("get", "/sent-days", (req, res) => {
-  db.query("SELECT date FROM sent_days", (err, rows) => {
-    if (err) return sendError(res, 500, err.message);
-
-    const dates = rows.map((r) =>
-      r.date instanceof Date
-        ? r.date.toISOString().slice(0, 10)
-        : r.date
-    );
-
-    return sendData(res, dates);
-  });
-});
-
-registerRoute("post", "/sent-days", (req, res) => {
-  const { date, sent_by } = req.body;
-
-  if (!date) return sendError(res, 400, "date required");
-
-  db.query(
-    "INSERT INTO sent_days (date, sent_by) VALUES (?, ?) ON DUPLICATE KEY UPDATE sent_by=VALUES(sent_by)",
-    [date, sent_by || null],
-    (err) => {
-      if (err) return sendError(res, 500, err.message);
-      return sendData(res, { success: true });
-    }
-  );
-});
-
-registerRoute("delete", "/sent-days/:date", (req, res) => {
-  db.query("DELETE FROM sent_days WHERE date=?", [req.params.date], (err) => {
-    if (err) return sendError(res, 500, err.message);
-    return sendData(res, { success: true });
-  });
-});
+registerResourceRoutes(app);
 
 
 // =========================
