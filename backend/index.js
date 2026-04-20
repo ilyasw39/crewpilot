@@ -399,7 +399,7 @@ async function createStoreHandler(req, res) {
     // 1. create user
     const hashedPassword = await bcrypt.hash(password, 10);
     const [userResult] = await dbp.query(
-      "INSERT INTO users (username, password, role) VALUES (?, ?, 'owner')",
+      "INSERT INTO users (username, password) VALUES (?, ?)",
       [username, hashedPassword]
     );
 
