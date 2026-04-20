@@ -126,7 +126,7 @@ function registerMeSubroutes(me) {
 
 function registerResourceRoutes(r) {
   r.get("/shifts", (req, res) => {
-    db.query("SELECT * FROM shifts ORDER BY start ASC", (err, rows) => {
+    db.query("SELECT * FROM shifts ORDER BY start_time ASC", (err, rows) => {
       if (err) return sendError(res, 500, err.message);
       return sendData(res, rows);
     });
