@@ -4,12 +4,27 @@ USE crewpilot;
 
 CREATE TABLE IF NOT EXISTS employees (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  store_id INT NULL,
   name VARCHAR(255),
   email VARCHAR(255),
   phone VARCHAR(50),
   role VARCHAR(50),
   availability JSON NULL
 );
+
+CREATE TABLE IF NOT EXISTS users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(191) NOT NULL UNIQUE,
+  password VARCHAR(255) NOT NULL,
+  role VARCHAR(50) NOT NULL,
+  employee_id INT NULL,
+  CONSTRAINT fk_users_employee
+    FOREIGN KEY (employee_id) REFERENCES employees (id) ON DELETE SET NULL
+);
+
+INSERT IGNORE INTO users (username, password, role, employee_id) VALUES
+  ('jess', '1212', 'owner', NULL),
+  ('donna', '3434', 'owner', NULL);
 
 -- employee_id NULL so ON DELETE SET NULL is valid on employees
 CREATE TABLE IF NOT EXISTS shifts (

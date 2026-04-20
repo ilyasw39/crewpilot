@@ -377,58 +377,31 @@
 
       async function handleLogin(event) {
         event.preventDefault();
+
         const username = document.getElementById("username").value;
         const password = document.getElementById("password").value;
 
-        const ownerAccounts = { jess: "1212", donna: "3434" };
-        if (ownerAccounts[username] && ownerAccounts[username] === password) {
-          localStorage.setItem(
-            "loggedInUser",
-            JSON.stringify({ username, role: "owner" })
-          );
-          window.location.href = "schedule.html";
-          return;
-        }
-
         try {
-          const res = await fetch(`${API_BASE}/employees`);
-          if (!res.ok) throw new Error(await res.text());
-          const employees = await res.json();
-          const employee = (Array.isArray(employees) ? employees : []).find(
-            (emp) => {
-              const nameMatch =
-                emp.name && emp.name.toLowerCase() === username.toLowerCase();
-              const usernameMatch =
-                emp.username?.toLowerCase() === username.toLowerCase();
-              const passwordMatch = emp.password === password;
-              const phoneMatch = emp.phone === password;
+          const res = await fetch(`${API_BASE}/login`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ username, password }),
+          });
 
-              return (
-                (nameMatch || usernameMatch) && (passwordMatch || phoneMatch)
-              );
-            }
-          );
-
-          if (employee) {
-            localStorage.setItem(
-              "loggedInUser",
-              JSON.stringify({
-                id: employee.id,
-                name: employee.name,
-                role: normalizeRole(employee.role),
-                username: employee.username,
-              })
-            );
-            window.location.href = "schedule.html";
-            return;
+          if (!res.ok) {
+            throw new Error("Invalid login");
           }
-        } catch (e) {
-          console.error(e);
-          showErrorMessage("Could not reach server. Try again.");
-          return;
-        }
 
-        showErrorMessage("Invalid username or password");
+          const user = await res.json();
+          const normalized = { ...user, role: normalizeRole(user.role) };
+          localStorage.setItem("loggedInUser", JSON.stringify(normalized));
+
+          window.location.href = "schedule.html";
+        } catch (err) {
+          showErrorMessage("Invalid username or password");
+        }
       }
 
       function toggleSettings() {

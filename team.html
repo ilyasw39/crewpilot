@@ -843,7 +843,7 @@
 
       async function loadEmployees() {
         try {
-          const res = await fetch(`${API_BASE}/employees`);
+          const res = await fetch(`${API_BASE}/me/employees`);
           if (!res.ok) throw new Error(await res.text());
           let employees = await res.json();
           employeeList = employees.map((emp) => ({
@@ -984,7 +984,7 @@
           const phone = document.getElementById("empPhone").value;
 
           try {
-          const res = await fetch(`${API_BASE}/employees`, {
+          const res = await fetch(`${API_BASE}/me/employees`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1024,7 +1024,8 @@
       function renderAvailabilityEditor(employee) {
         const editor = document.getElementById("availabilityEditor");
         const availability = normalizeAvailability(employee.availability);
-        const isSelf = currentUser.name === employee.name;
+        const isSelf =
+          Number(currentUser.employee_id) === Number(employee.id);
         const canEdit =
           isSelf || currentUser.role === "owner" || currentUser.role === "manager";
 
@@ -1237,9 +1238,7 @@
         const canEdit =
           currentUser.role === "owner" ||
           currentUser.role === "manager" ||
-          (currentUser.id != null &&
-            Number(currentUser.id) === Number(emp.id)) ||
-          currentUser.name === emp.name;
+          Number(currentUser.employee_id) === Number(emp.id);
 
         const modal = document.createElement("div");
         modal.className = "popup";
@@ -1354,7 +1353,7 @@
 
           try {
             const res = await fetch(
-              `${API_BASE}/employees/${selectedRow}`,
+              `${API_BASE}/me/employees/${selectedRow}`,
               {
                 method: "PUT",
                 headers: {
@@ -1384,7 +1383,7 @@
           return;
 
         try {
-          const res = await fetch(`${API_BASE}/employees/${employee.id}`, {
+          const res = await fetch(`${API_BASE}/me/employees/${employee.id}`, {
             method: "DELETE",
           });
           if (!res.ok) throw new Error(await res.text());

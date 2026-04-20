@@ -6,6 +6,16 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+function mockAuth(req, res, next) {
+  // TEMP: replace with real JWT/session auth later
+  req.user = {
+    id: 1,
+    storeId: 1,
+    role: "owner",
+  };
+  next();
+}
+
 const db = mysql.createConnection({
   host: "localhost",
   user: "root",
@@ -19,6 +29,12 @@ db.connect((err) => {
     return;
   }
   console.log("Connected to MySQL");
+  db.query(
+    "ALTER TABLE employees ADD COLUMN IF NOT EXISTS store_id INT NULL",
+    (alterErr) => {
+      if (alterErr) console.error("Could not ensure employees.store_id:", alterErr);
+    }
+  );
 });
 
 
@@ -50,12 +66,14 @@ app.post("/login", (req, res) => {
   );
 });
 
+app.use("/me", mockAuth);
+
 
 // =========================
 // EMPLOYEES
 // =========================
-app.get("/employees", (req, res) => {
-  db.query("SELECT * FROM employees", (err, rows) => {
+app.get("/me/employees", (req, res) => {
+  db.query("SELECT * FROM employees WHERE store_id = ?", [req.user.storeId], (err, rows) => {
     if (err) return res.status(500).send(err);
 
     const parsed = rows.map((r) => ({
@@ -67,12 +85,19 @@ app.get("/employees", (req, res) => {
   });
 });
 
-app.post("/employees", (req, res) => {
-  const { name, email, phone, availability } = req.body;
+app.post("/me/employees", (req, res) => {
+  const { name, email, phone, role, availability } = req.body;
 
   db.query(
-    "INSERT INTO employees (name, email, phone, availability) VALUES (?, ?, ?, ?)",
-    [name, email, phone, JSON.stringify(availability || {})],
+    "INSERT INTO employees (store_id, name, email, phone, role, availability) VALUES (?, ?, ?, ?, ?, ?)",
+    [
+      req.user.storeId,
+      name,
+      email,
+      phone,
+      role || "employee",
+      JSON.stringify(availability || {}),
+    ],
     (err, result) => {
       if (err) return res.status(500).send(err);
       res.json({ id: result.insertId });
@@ -80,24 +105,38 @@ app.post("/employees", (req, res) => {
   );
 });
 
-app.put("/employees/:id", (req, res) => {
-  const { name, email, phone, availability } = req.body;
+app.put("/me/employees/:id", (req, res) => {
+  const { name, email, phone, role, availability } = req.body;
 
   db.query(
-    "UPDATE employees SET name=?, email=?, phone=?, availability=? WHERE id=?",
-    [name, email, phone, JSON.stringify(availability || {}), req.params.id],
-    (err) => {
+    "UPDATE employees SET name=?, email=?, phone=?, role=?, availability=? WHERE id=? AND store_id=?",
+    [
+      name,
+      email,
+      phone,
+      role,
+      JSON.stringify(availability || {}),
+      req.params.id,
+      req.user.storeId,
+    ],
+    (err, result) => {
       if (err) return res.status(500).send(err);
+      if (!result.affectedRows) return res.status(404).send("Employee not found");
       res.sendStatus(200);
     }
   );
 });
 
-app.delete("/employees/:id", (req, res) => {
-  db.query("DELETE FROM employees WHERE id=?", [req.params.id], (err) => {
+app.delete("/me/employees/:id", (req, res) => {
+  db.query(
+    "DELETE FROM employees WHERE id=? AND store_id=?",
+    [req.params.id, req.user.storeId],
+    (err, result) => {
     if (err) return res.status(500).send(err);
+    if (!result.affectedRows) return res.status(404).send("Employee not found");
     res.sendStatus(200);
-  });
+    }
+  );
 });
 
 
