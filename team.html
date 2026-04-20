@@ -880,7 +880,7 @@
 
       async function loadShifts() {
         try {
-          const res = await fetch(`${API_BASE}/shifts`);
+          const res = await apiFetch(`${API_BASE}/shifts`);
           if (!res.ok) throw new Error(await res.text());
           scheduleShiftsCache = await parseApiData(res);
           if (!Array.isArray(scheduleShiftsCache)) scheduleShiftsCache = [];

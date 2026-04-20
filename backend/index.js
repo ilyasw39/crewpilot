@@ -123,20 +123,24 @@ function registerMeSubroutes(me) {
 }
 
 function registerResourceRoutes(r) {
-  r.get("/shifts", (req, res) => {
-    db.query("SELECT * FROM shifts ORDER BY start_time ASC", (err, rows) => {
-      if (err) return sendError(res, 500, err.message);
-      const mapped = (rows || []).map((r) => ({
-        ...r,
-        start: r.start_time != null ? r.start_time : r.start,
-        end: r.end_time != null ? r.end_time : r.end,
-      }));
-      return sendData(res, mapped);
-    });
+  r.get("/shifts", auth, requireStore, (req, res) => {
+    db.query(
+      "SELECT * FROM shifts WHERE store_id = ? ORDER BY start_time ASC",
+      [req.user.storeId],
+      (err, rows) => {
+        if (err) return sendError(res, 500, err.message);
+        const mapped = (rows || []).map((r) => ({
+          ...r,
+          start: r.start_time,
+          end: r.end_time,
+        }));
+        return sendData(res, mapped);
+      }
+    );
   });
 
-  r.post("/shifts", (req, res) => {
-    const { employee_id, type } = req.body;
+  r.post("/shifts", auth, requireStore, (req, res) => {
+    const { employee_id } = req.body;
     const start_time = req.body.start_time ?? req.body.start;
     const end_time = req.body.end_time ?? req.body.end;
 
@@ -144,7 +148,7 @@ function registerResourceRoutes(r) {
 
     db.query(
       "INSERT INTO shifts (employee_id, start_time, end_time, store_id) VALUES (?, ?, ?, ?)",
-      [employee_id, start_time, end_time, type || "Open"],
+      [employee_id, start_time, end_time, req.user?.storeId || null],
       (err, result) => {
         if (err) return sendError(res, 500, err.message);
         return sendData(res, { id: result.insertId });
@@ -152,14 +156,14 @@ function registerResourceRoutes(r) {
     );
   });
 
-  r.put("/shifts/:id", (req, res) => {
+  r.put("/shifts/:id", auth, requireStore, (req, res) => {
     const { employee_id, type } = req.body;
     const start_time = req.body.start_time ?? req.body.start;
     const end_time = req.body.end_time ?? req.body.end;
 
     db.query(
-      "UPDATE shifts SET employee_id=?, start_time=?, end_time=?, type=? WHERE id=?",
-      [employee_id, start_time, end_time, type || "Open", req.params.id],
+      "UPDATE shifts SET employee_id=?, start_time=?, end_time=?, type=? WHERE id=? AND store_id=?",
+      [employee_id, start_time, end_time, type || "Open", req.params.id, req.user.storeId],
       (err) => {
         if (err) return sendError(res, 500, err.message);
         return sendData(res, { success: true });
@@ -167,8 +171,8 @@ function registerResourceRoutes(r) {
     );
   });
 
-  r.delete("/shifts/:id", (req, res) => {
-    db.query("DELETE FROM shifts WHERE id=?", [req.params.id], (err) => {
+  r.delete("/shifts/:id", auth, requireStore, (req, res) => {
+    db.query("DELETE FROM shifts WHERE id=? AND store_id=?", [req.params.id, req.user.storeId], (err) => {
       if (err) return sendError(res, 500, err.message);
       return sendData(res, { success: true });
     });

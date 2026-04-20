@@ -1266,7 +1266,7 @@
 
       async function loadShiftsFromServer() {
         try {
-          const res = await fetch(`${API_BASE}/shifts`);
+          const res = await apiFetch(`${API_BASE}/shifts`);
           if (!res.ok) {
             throw new Error(await res.text());
           }
@@ -1288,7 +1288,7 @@
       }
 
       async function persistShiftsToServer() {
-        const res = await fetch(`${API_BASE}/shifts`, {
+        const res = await apiFetch(`${API_BASE}/shifts`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(serializeShiftsPayload()),
