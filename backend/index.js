@@ -9,7 +9,7 @@ app.use(express.json());
 const db = mysql.createConnection({
   host: "localhost",
   user: "root",
-  password: "YOUR_PASSWORD",
+  password: "1234",
   database: "crewpilot",
 });
 const dbp = db.promise();
@@ -66,12 +66,6 @@ db.connect((err) => {
       if (membersErr) {
         console.error("Could not ensure store_members table:", membersErr);
       }
-    }
-  );
-  db.query(
-    "ALTER TABLE employees ADD COLUMN IF NOT EXISTS store_id INT NULL",
-    (alterErr) => {
-      if (alterErr) console.error("Could not ensure employees.store_id:", alterErr);
     }
   );
 });
