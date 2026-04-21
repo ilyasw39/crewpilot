@@ -1051,7 +1051,7 @@
           if (sentDateKeySet.has(key)) continue;
           const iso = new Date(key).toISOString().slice(0, 10);
           try {
-            const res = await fetch(`${API_BASE}/sent-days`, {
+            const res = await apiFetch(`${API_BASE}/sent-days`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ date: iso, sent_by: uid }),
@@ -1192,6 +1192,8 @@
         swapPool: [],
         swapRequests: [],
         user: null,
+        /** Matches `GET /shifts` → `data.revision` for optimistic bulk save */
+        shiftsRevision: 0,
       };
 
       const API_BASE = "https://crewpilot.onrender.com/api/v1";
@@ -1270,7 +1272,12 @@
           if (!res.ok) {
             throw new Error(await res.text());
           }
-          const rows = await parseApiData(res);
+          const data = await parseApiData(res);
+          const rows = Array.isArray(data) ? data : data?.shifts;
+          const rev = data && data.revision != null ? Number(data.revision) : NaN;
+          if (Number.isFinite(rev)) {
+            AppState.shiftsRevision = rev;
+          }
           AppState.events = (Array.isArray(rows) ? rows : []).map((ev) =>
             normalizeStateEvent({
               id: ev.id,
@@ -1288,13 +1295,26 @@
       }
 
       async function persistShiftsToServer() {
-        const res = await apiFetch(`${API_BASE}/shifts`, {
+        const res = await apiFetch(`${API_BASE}/shifts/bulk`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(serializeShiftsPayload()),
+          body: JSON.stringify({
+            shifts: serializeShiftsPayload(),
+            revision: AppState.shiftsRevision ?? 0,
+          }),
         });
+        if (res.status === 409) {
+          showErrorMessage("Schedule was updated elsewhere. Reloading…");
+          await loadShiftsFromServer();
+          renderCalendarFromState();
+          return;
+        }
         if (!res.ok) {
           throw new Error(await res.text());
+        }
+        const out = await parseApiData(res);
+        if (out && out.revision != null && Number.isFinite(Number(out.revision))) {
+          AppState.shiftsRevision = Number(out.revision);
         }
         await loadShiftsFromServer();
         renderCalendarFromState();
@@ -1461,7 +1481,7 @@
 
       async function loadSentDaysFromServer() {
         try {
-          const res = await fetch(`${API_BASE}/sent-days`);
+          const res = await apiFetch(`${API_BASE}/sent-days`);
           if (!res.ok) throw new Error(await res.text());
           const dates = await parseApiData(res);
           sentDateKeySet.clear();
@@ -1476,7 +1496,7 @@
 
       async function loadShiftPoolFromServer() {
         try {
-          const res = await fetch(`${API_BASE}/shift-pool`);
+          const res = await apiFetch(`${API_BASE}/shift-pool`);
           if (!res.ok) throw new Error(await res.text());
           const rows = await parseApiData(res);
           AppState.swapPool = (Array.isArray(rows) ? rows : []).map((r) => {
@@ -1509,7 +1529,7 @@
 
       async function loadSwapRequestsFromServer() {
         try {
-          const res = await fetch(`${API_BASE}/swap-requests`);
+          const res = await apiFetch(`${API_BASE}/swap-requests`);
           if (!res.ok) throw new Error(await res.text());
           const rows = await parseApiData(res);
           AppState.swapRequests = (Array.isArray(rows) ? rows : []).map((r) => ({
@@ -1907,7 +1927,7 @@
           return;
         }
         try {
-          const res = await fetch(`${API_BASE}/shift-pool`, {
+          const res = await apiFetch(`${API_BASE}/shift-pool`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1969,7 +1989,7 @@
         const event = getAllEvents().find((e) => Number(e.id) === shiftId);
         if (!event) {
           try {
-            await fetch(`${API_BASE}/shift-pool/${entry.id}`, {
+            await apiFetch(`${API_BASE}/shift-pool/${entry.id}`, {
               method: "DELETE",
             });
             await loadShiftPoolFromServer();
@@ -1991,7 +2011,7 @@
           return;
         }
         try {
-          const res = await fetch(`${API_BASE}/shift-pool/${entry.id}`, {
+          const res = await apiFetch(`${API_BASE}/shift-pool/${entry.id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -2021,7 +2041,7 @@
         }
 
         try {
-          const res = await fetch(`${API_BASE}/shift-pool/${entry.id}`, {
+          const res = await apiFetch(`${API_BASE}/shift-pool/${entry.id}`, {
             method: "DELETE",
           });
           if (!res.ok) throw new Error(await res.text());
@@ -2042,7 +2062,7 @@
           return;
         }
         try {
-          const res = await fetch(`${API_BASE}/shift-pool/${entry.id}`, {
+          const res = await apiFetch(`${API_BASE}/shift-pool/${entry.id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ requested_by: null, status: "posted" }),
@@ -2074,7 +2094,7 @@
         );
         try {
           await persistShiftsToServer();
-          const res = await fetch(`${API_BASE}/shift-pool/${entry.id}`, {
+          const res = await apiFetch(`${API_BASE}/shift-pool/${entry.id}`, {
             method: "DELETE",
           });
           if (!res.ok) throw new Error(await res.text());
@@ -2094,7 +2114,7 @@
         const entry = findPoolEntry(poolId);
         if (!entry || entry.status !== "posted") return;
         try {
-          const res = await fetch(`${API_BASE}/shift-pool/${entry.id}`, {
+          const res = await apiFetch(`${API_BASE}/shift-pool/${entry.id}`, {
             method: "DELETE",
           });
           if (!res.ok) throw new Error(await res.text());
@@ -2113,7 +2133,7 @@
         const entry = findPoolEntry(poolId);
         if (!entry || entry.status !== "claimed") return;
         try {
-          const res = await fetch(`${API_BASE}/shift-pool/${entry.id}`, {
+          const res = await apiFetch(`${API_BASE}/shift-pool/${entry.id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ requested_by: null, status: "posted" }),
@@ -2279,14 +2299,12 @@
           return showErrorMessage("Could not resolve employees for swap.");
         }
         try {
-          const res = await fetch(`${API_BASE}/swap-requests`, {
+          const res = await apiFetch(`${API_BASE}/swap-requests`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               shift_id: shiftId,
-              from_employee_id: fromId,
               to_employee_id: toId,
-              status: "pending",
             }),
           });
           if (!res.ok) throw new Error(await res.text());
@@ -2336,7 +2354,7 @@
         }
 
         try {
-          const res = await fetch(`${API_BASE}/swap-requests/${requestId}`, {
+          const res = await apiFetch(`${API_BASE}/swap-requests/${requestId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ status: "awaiting_approval" }),
@@ -2383,7 +2401,7 @@
 
         try {
           await persistShiftsToServer();
-          const res1 = await fetch(`${API_BASE}/swap-requests/${requestId}`, {
+          const res1 = await apiFetch(`${API_BASE}/swap-requests/${requestId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ status: "approved" }),
@@ -2405,7 +2423,7 @@
         const req = AppState.swapRequests.find((r) => r.id === requestId);
         if (!req) return;
         try {
-          const res = await fetch(`${API_BASE}/swap-requests/${requestId}`, {
+          const res = await apiFetch(`${API_BASE}/swap-requests/${requestId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ status: "rejected" }),
@@ -2968,13 +2986,13 @@
                 const iso = d.toISOString().slice(0, 10);
                 try {
                   if (sentDateKeySet.has(key)) {
-                    const res = await fetch(`${API_BASE}/sent-days/${iso}`, {
+                    const res = await apiFetch(`${API_BASE}/sent-days/${iso}`, {
                       method: "DELETE",
                     });
                     if (!res.ok) throw new Error(await res.text());
                     sentDateKeySet.delete(key);
                   } else {
-                    const res = await fetch(`${API_BASE}/sent-days`, {
+                    const res = await apiFetch(`${API_BASE}/sent-days`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ date: iso, sent_by: uid }),

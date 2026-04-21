@@ -882,7 +882,8 @@
         try {
           const res = await apiFetch(`${API_BASE}/shifts`);
           if (!res.ok) throw new Error(await res.text());
-          scheduleShiftsCache = await parseApiData(res);
+          const data = await parseApiData(res);
+          scheduleShiftsCache = Array.isArray(data) ? data : data?.shifts;
           if (!Array.isArray(scheduleShiftsCache)) scheduleShiftsCache = [];
         } catch (err) {
           console.error(err);

@@ -4,7 +4,8 @@ USE crewpilot;
 
 CREATE TABLE IF NOT EXISTS stores (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(255) NOT NULL
+  name VARCHAR(255) NOT NULL,
+  shifts_revision INT UNSIGNED NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS employees (
@@ -13,7 +14,7 @@ CREATE TABLE IF NOT EXISTS employees (
   name VARCHAR(255),
   email VARCHAR(255),
   phone VARCHAR(50),
-  role VARCHAR(50),
+  role VARCHAR(50) DEFAULT 'employee',
   availability JSON NULL
 );
 
@@ -66,13 +67,22 @@ CREATE TABLE IF NOT EXISTS shift_pool (
 
 CREATE TABLE IF NOT EXISTS sent_days (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  store_id INT NOT NULL,
   date DATE NOT NULL,
   sent_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_sent_days_store
+    FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE,
   CONSTRAINT fk_sent_days_sent_by
     FOREIGN KEY (sent_by) REFERENCES employees (id) ON DELETE SET NULL,
-  UNIQUE KEY uq_sent_days_date (date)
+  UNIQUE KEY uq_sent_days_store_date (store_id, date)
 );
+
+-- If you already have sent_days without store_id, run (adjust default store id):
+-- ALTER TABLE sent_days ADD COLUMN store_id INT NOT NULL DEFAULT 1;
+-- ALTER TABLE sent_days ADD CONSTRAINT fk_sent_days_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE;
+-- ALTER TABLE sent_days DROP INDEX uq_sent_days_date;
+-- CREATE UNIQUE INDEX uq_sent_days_store_date ON sent_days (store_id, date);
 
 -- Direct swap requests (not in original brief; needed without localStorage)
 CREATE TABLE IF NOT EXISTS swap_requests (
