@@ -452,7 +452,7 @@
           }
 
           const user = await parseApiData(res);
-          const employeeId = user.employeeId ?? user.employee_id ?? null;
+          const employeeId = user.employeeId ?? null;
           const idFromToken = readJwtUserId(user.token);
           const normalized = {
             ...user,
@@ -462,7 +462,6 @@
             role: normalizeRole(user.role),
             storeId: user.storeId ?? null,
             employeeId,
-            employee_id: employeeId,
           };
           localStorage.setItem("loggedInUser", JSON.stringify(normalized));
 
@@ -597,7 +596,6 @@
               token: data.token,
               role: "owner",
               employeeId: data.employeeId ?? null,
-              employee_id: data.employeeId ?? null,
             })
           );
 

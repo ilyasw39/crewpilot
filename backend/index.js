@@ -37,6 +37,19 @@ if (!JWT_SECRET) {
 const sendData = (res, data, status = 200) => res.status(status).json({ data });
 const sendError = (res, status, message) => res.status(status).json({ error: message });
 
+function sendDbError(res, err, fallbackMessage = "internal error") {
+  const dup =
+    err &&
+    (err.code === "ER_DUP_ENTRY" ||
+      err.errno === 1062 ||
+      (typeof err.sqlMessage === "string" && err.sqlMessage.includes("Duplicate")));
+  if (dup) {
+    return sendError(res, 409, "duplicate");
+  }
+  console.error(err);
+  return sendError(res, 500, fallbackMessage);
+}
+
 function parseEmployeeAvailability(value) {
   if (value == null || value === "") return null;
   try {
@@ -148,7 +161,7 @@ function registerMeSubroutes(me) {
       );
       return sendData(res, { id: insertHeader.insertId });
     } catch (err) {
-      return sendError(res, 500, err.message);
+      return sendDbError(res, err);
     }
   });
 
@@ -218,6 +231,7 @@ function registerResourceRoutes(r) {
       );
       const mapped = (rows || []).map((r) => ({
         ...r,
+        employeeId: r.employee_id,
         start: r.start_time,
         end: r.end_time,
       }));
@@ -1065,11 +1079,17 @@ async function runStartupMigrations() {
 
   await tryAlter("ALTER TABLE employees ADD COLUMN user_id INT NULL");
   await tryAlter("ALTER TABLE employees MODIFY COLUMN user_id INT NULL");
+  await tryAlter("ALTER TABLE stores ADD UNIQUE KEY uq_stores_name (name)");
+  await tryAlter(
+    "ALTER TABLE employees ADD UNIQUE KEY uq_employees_user_store (user_id, store_id)"
+  );
   try {
-    await dbp.query("ALTER TABLE stores DROP INDEX uq_stores_name");
+    await dbp.query(
+      "ALTER TABLE employees ADD CONSTRAINT fk_employees_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+    );
   } catch (e) {
-    if (e.errno !== 1091) {
-      console.warn("Could not drop stores.uq_stores_name (if absent):", e.message);
+    if (e.errno !== 1826 && e.errno !== 1061 && e.errno !== 1215 && e.errno !== 1452) {
+      console.error("Could not add employees.user_id FK:", e.message);
     }
   }
 }
@@ -1081,38 +1101,6 @@ db.connect((err) => {
     return;
   }
   console.log("Connected to MySQL");
-  db.query(
-    `CREATE TABLE IF NOT EXISTS stores (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(255) NOT NULL,
-      shifts_revision INT UNSIGNED NOT NULL DEFAULT 0
-    )`,
-    (storesErr) => {
-      if (storesErr) console.error("Could not ensure stores table:", storesErr);
-    }
-  );
-  db.query(
-    "ALTER TABLE stores ADD COLUMN shifts_revision INT UNSIGNED NOT NULL DEFAULT 0",
-    (alterErr) => {
-      if (alterErr && alterErr.errno !== 1060) {
-        console.error("Could not ensure stores.shifts_revision:", alterErr);
-      }
-    }
-  );
-  db.query(
-    `CREATE TABLE IF NOT EXISTS store_members (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      user_id INT NOT NULL,
-      store_id INT NOT NULL,
-      role VARCHAR(50) NOT NULL,
-      UNIQUE KEY uq_user_store (user_id, store_id)
-    )`,
-    (membersErr) => {
-      if (membersErr) {
-        console.error("Could not ensure store_members table:", membersErr);
-      }
-    }
-  );
   runStartupMigrations()
     .then(() => startHttpServer())
     .catch((migrationErr) => {
@@ -1188,7 +1176,7 @@ async function loginHandler(req, res) {
       employeeId: row.employee_id,
     });
   } catch (err) {
-    return sendError(res, 500, "login failed");
+    return sendDbError(res, err, "login failed");
   }
 }
 
@@ -1244,7 +1232,7 @@ async function createStoreHandler(req, res) {
   } catch (err) {
     await dbp.rollback();
     console.error("CREATE STORE ERROR:", err);
-    return sendError(res, 500, err.message);
+    return sendDbError(res, err, "internal error");
   }
 }
 
@@ -1267,10 +1255,6 @@ app.use("/api/v1", v1Router);
 // =========================
 // Legacy (non-versioned) aliases
 // =========================
-app.post("/login", authLimiter, loginHandler);
-app.post("/create-store", authLimiter, createStoreHandler);
-app.post("/auth/login", authLimiter, loginHandler);
-app.post("/auth/register", authLimiter, createStoreHandler);
 app.get("/health", (req, res) => sendData(res, { status: "ok" }));
 
 const meLegacy = express.Router();

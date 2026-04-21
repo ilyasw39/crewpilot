@@ -1240,7 +1240,12 @@
       }
       function normalizeUser(userObj) {
         if (!userObj || typeof userObj !== "object") return null;
-        return { ...userObj, role: normalizeUserRole(userObj.role) };
+        const out = { ...userObj, role: normalizeUserRole(userObj.role) };
+        if (out.employeeId == null && out.employee_id != null) {
+          out.employeeId = out.employee_id;
+          delete out.employee_id;
+        }
+        return out;
       }
       function initializeState() {
         const latestLoggedIn = normalizeUser(safeParse("loggedInUser", null));
@@ -1261,7 +1266,6 @@
         return getAllEvents().map((e) => {
           const row = {
             employeeId: e.employeeId,
-            employee_id: e.employeeId,
             shiftType: e.shiftType,
             type: e.shiftType,
             start: e.start instanceof Date ? e.start.toISOString() : e.start,
@@ -1290,7 +1294,7 @@
           AppState.events = (Array.isArray(rows) ? rows : []).map((ev) =>
             normalizeStateEvent({
               id: ev.id,
-              employeeId: ev.employee_id ?? ev.employeeId,
+              employeeId: ev.employeeId ?? ev.employee_id,
               shiftType: ev.type || ev.shiftType || "Open",
               start: ev.start,
               end: ev.end,
@@ -1426,11 +1430,6 @@
           const eid = Number(user.employeeId);
           if (Number.isFinite(eid) && eid > 0) return eid;
         }
-        if ("employee_id" in user) {
-          const eid = Number(user.employee_id);
-          if (Number.isFinite(eid) && eid > 0) return eid;
-          return null;
-        }
         if (user.id != null) {
           const legacy = Number(user.id);
           if (Number.isFinite(legacy) && legacy > 0) return legacy;
@@ -1467,7 +1466,7 @@
 
       function getEmployeeIdFromCalendarEvent(event) {
         const raw = event.extendedProps || {};
-        const id = raw.employeeId ?? raw.employee_id;
+        const id = raw.employeeId;
         if (id == null || id === "") return null;
         const n = Number(id);
         return Number.isFinite(n) && n > 0 ? n : null;
@@ -1803,7 +1802,10 @@
 
       function normalizeStateEvent(eventLike) {
         let employeeId = Number(
-          eventLike.employeeId ?? eventLike.employee_id ?? NaN
+          eventLike.employeeId ??
+            eventLike.extendedProps?.employeeId ??
+            eventLike.employee_id ??
+            NaN
         );
         if (!Number.isFinite(employeeId) || employeeId <= 0) {
           const legacyName =

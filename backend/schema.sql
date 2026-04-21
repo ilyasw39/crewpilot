@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS stores (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   shifts_revision INT UNSIGNED NOT NULL DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_stores_name (name)
 );
 
 -- =========================
@@ -138,17 +139,17 @@ CREATE TABLE IF NOT EXISTS sent_days (
 );
 
 -- =========================
--- INDEXES (IF NOT EXISTS: safe to re-apply on MySQL 8+)
+-- INDEXES (run once with schema.sql)
 -- =========================
-CREATE INDEX IF NOT EXISTS idx_employees_store ON employees (store_id);
-CREATE INDEX IF NOT EXISTS idx_employees_user ON employees (user_id);
+CREATE INDEX idx_employees_store ON employees (store_id);
+CREATE INDEX idx_employees_user ON employees (user_id);
 
-CREATE INDEX IF NOT EXISTS idx_shifts_store ON shifts (store_id);
-CREATE INDEX IF NOT EXISTS idx_shifts_employee ON shifts (employee_id);
+CREATE INDEX idx_shifts_store ON shifts (store_id);
+CREATE INDEX idx_shifts_employee ON shifts (employee_id);
 
-CREATE INDEX IF NOT EXISTS idx_shift_pool_shift ON shift_pool (shift_id);
+CREATE INDEX idx_shift_pool_shift ON shift_pool (shift_id);
 
-CREATE INDEX IF NOT EXISTS idx_swap_requests_shift ON swap_requests (shift_id);
-CREATE INDEX IF NOT EXISTS idx_swap_requests_status ON swap_requests (status);
+CREATE INDEX idx_swap_requests_shift ON swap_requests (shift_id);
+CREATE INDEX idx_swap_requests_status ON swap_requests (status);
 
-CREATE INDEX IF NOT EXISTS idx_sent_days_store ON sent_days (store_id);
+CREATE INDEX idx_sent_days_store ON sent_days (store_id);
