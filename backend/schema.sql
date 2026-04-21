@@ -10,27 +10,30 @@ CREATE TABLE IF NOT EXISTS stores (
 
 CREATE TABLE IF NOT EXISTS employees (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NULL,
   store_id INT NULL,
   name VARCHAR(255),
   email VARCHAR(255),
   phone VARCHAR(50),
   role VARCHAR(50) DEFAULT 'employee',
-  availability JSON NULL
+  availability JSON NULL,
+  KEY idx_employees_user_id (user_id),
+  UNIQUE KEY uq_employees_user_store (user_id, store_id)
 );
 
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   username VARCHAR(191) NOT NULL UNIQUE,
   password VARCHAR(255) NOT NULL,
-  role VARCHAR(50) NOT NULL,
+  role VARCHAR(50) NULL,
   employee_id INT NULL,
   CONSTRAINT fk_users_employee
     FOREIGN KEY (employee_id) REFERENCES employees (id) ON DELETE SET NULL
 );
 
 INSERT IGNORE INTO users (username, password, role, employee_id) VALUES
-  ('jess', '1212', 'owner', NULL),
-  ('donna', '3434', 'owner', NULL);
+  ('jess', '1212', NULL, NULL),
+  ('donna', '3434', NULL, NULL);
 
 CREATE TABLE IF NOT EXISTS store_members (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -40,17 +43,21 @@ CREATE TABLE IF NOT EXISTS store_members (
   UNIQUE KEY uq_user_store (user_id, store_id)
 );
 
--- employee_id NULL so ON DELETE SET NULL is valid on employees
+-- Canonical schedule rows (backend source of truth; API uses start_time / end_time).
 CREATE TABLE IF NOT EXISTS shifts (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  store_id INT NOT NULL,
   employee_id INT NULL,
-  start DATETIME NOT NULL,
-  end DATETIME NOT NULL,
-  type VARCHAR(50) NOT NULL,
+  start_time DATETIME NOT NULL,
+  end_time DATETIME NOT NULL,
+  CONSTRAINT fk_shifts_store
+    FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE,
   CONSTRAINT fk_shifts_employee
     FOREIGN KEY (employee_id) REFERENCES employees (id) ON DELETE SET NULL
 );
 
+-- Pool marketplace (status: posted | claimed | approved).
+-- Target contract adds store_id here (denormalized tenant); runtime INSERT derives tenant via JOIN shifts.
 CREATE TABLE IF NOT EXISTS shift_pool (
   id INT AUTO_INCREMENT PRIMARY KEY,
   shift_id INT NOT NULL,

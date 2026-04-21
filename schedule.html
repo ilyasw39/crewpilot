@@ -1201,12 +1201,21 @@
         const user = JSON.parse(localStorage.getItem("loggedInUser") || "null");
         return user?.token || null;
       }
+      function getStoreIdForHeaders() {
+        const user = JSON.parse(localStorage.getItem("loggedInUser") || "null");
+        const sid = user?.storeId;
+        if (sid == null || sid === "") return null;
+        const n = Number(sid);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      }
       function apiFetch(url, options = {}) {
         const token = getAuthToken();
+        const storeId = getStoreIdForHeaders();
         return fetch(url, {
           ...options,
           headers: {
             ...(options.headers || {}),
+            ...(storeId != null ? { "x-store-id": String(storeId) } : {}),
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         });
@@ -1413,6 +1422,10 @@
 
       function resolveUserEmployeeId() {
         if (!user) return null;
+        if (user.employeeId != null && user.employeeId !== "") {
+          const eid = Number(user.employeeId);
+          if (Number.isFinite(eid) && eid > 0) return eid;
+        }
         if ("employee_id" in user) {
           const eid = Number(user.employee_id);
           if (Number.isFinite(eid) && eid > 0) return eid;

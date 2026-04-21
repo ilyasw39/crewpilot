@@ -360,6 +360,14 @@
               required
               autocomplete="current-password"
             />
+            <label for="storeName">Store name</label>
+            <input
+              type="text"
+              id="storeName"
+              name="storeName"
+              required
+              autocomplete="organization"
+            />
             <button type="submit">Login</button>
           </form>
           <button
@@ -384,12 +392,21 @@
         const user = JSON.parse(localStorage.getItem("loggedInUser") || "null");
         return user?.token || null;
       }
+      function getStoreIdForHeaders() {
+        const user = JSON.parse(localStorage.getItem("loggedInUser") || "null");
+        const sid = user?.storeId;
+        if (sid == null || sid === "") return null;
+        const n = Number(sid);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      }
       function apiFetch(url, options = {}) {
         const token = getAuthToken();
+        const storeId = getStoreIdForHeaders();
         return fetch(url, {
           ...options,
           headers: {
             ...(options.headers || {}),
+            ...(storeId != null ? { "x-store-id": String(storeId) } : {}),
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         });
@@ -399,11 +416,27 @@
         return body?.data;
       }
 
+      function readJwtUserId(token) {
+        if (!token || typeof token !== "string") return null;
+        const parts = token.split(".");
+        if (parts.length < 2) return null;
+        try {
+          const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+          const payload = JSON.parse(atob(b64));
+          const raw = payload.id ?? payload.userId;
+          const n = Number(raw);
+          return Number.isFinite(n) && n > 0 ? n : null;
+        } catch {
+          return null;
+        }
+      }
+
       async function handleLogin(event) {
         event.preventDefault();
 
-        const username = document.getElementById("username").value;
+        const username = document.getElementById("username").value.trim();
         const password = document.getElementById("password").value;
+        const storeName = document.getElementById("storeName").value.trim();
 
         try {
           const res = await fetch(`${API_BASE}/auth/login`, {
@@ -411,7 +444,7 @@
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ username, password }),
+            body: JSON.stringify({ username, password, storeName }),
           });
 
           if (!res.ok) {
@@ -419,10 +452,17 @@
           }
 
           const user = await parseApiData(res);
+          const employeeId = user.employeeId ?? user.employee_id ?? null;
+          const idFromToken = readJwtUserId(user.token);
           const normalized = {
             ...user,
-            id: user.userId ?? user.id,
+            id: idFromToken,
+            userId: idFromToken,
+            username,
             role: normalizeRole(user.role),
+            storeId: user.storeId ?? null,
+            employeeId,
+            employee_id: employeeId,
           };
           localStorage.setItem("loggedInUser", JSON.stringify(normalized));
 
@@ -556,6 +596,8 @@
               storeId: data.storeId,
               token: data.token,
               role: "owner",
+              employeeId: data.employeeId ?? null,
+              employee_id: data.employeeId ?? null,
             })
           );
 

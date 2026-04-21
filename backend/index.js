@@ -3,11 +3,20 @@ const mysql = require("mysql2");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const cors = require("cors");
+const rateLimit = require("express-rate-limit");
 require("dotenv").config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many auth attempts, try again later" },
+});
 
 const url = new URL(process.env.MYSQL_PUBLIC_URL);
 const db = mysql.createConnection({
@@ -61,24 +70,18 @@ function registerMeSubroutes(me) {
       id: req.user.id,
       storeId: req.user.storeId,
       role: req.user.role,
+      employeeId: req.user.employeeId,
     });
   });
 
-  me.get("/store", async (req, res) => {
-    try {
-      const [rows] = await dbp.execute(
-        "SELECT store_id, role FROM store_members WHERE user_id = ? LIMIT 1",
-        [req.user.id]
-      );
-
-      if (rows.length === 0) {
-        return sendData(res, null);
-      }
-
-      return sendData(res, rows[0]);
-    } catch (err) {
-      return sendError(res, 500, err.message);
+  me.get("/store", (req, res) => {
+    if (!req.user.storeId) {
+      return sendData(res, null);
     }
+    return sendData(res, {
+      store_id: req.user.storeId,
+      role: req.user.role,
+    });
   });
 
   me.get("/employees", requireStore, (req, res) => {
@@ -94,35 +97,79 @@ function registerMeSubroutes(me) {
     });
   });
 
-  me.post("/employees", requireStore, (req, res) => {
-    const { name, email, phone, role, availability } = req.body;
+  me.post("/employees", requireStore, async (req, res) => {
+    const { user_id, name, email, phone, role, availability } = req.body;
 
-    db.query(
-      "INSERT INTO employees (store_id, name, email, phone, role, availability) VALUES (?, ?, ?, ?, ?, ?)",
-      [
-        req.user.storeId,
-        name,
-        email,
-        phone || null,
-        normalizeEmployeeRole(role),
-        JSON.stringify(availability || {}),
-      ],
-      (err, result) => {
-        if (err) return sendError(res, 500, err.message);
-        return sendData(res, { id: result.insertId });
+    if (user_id === undefined || user_id === null || user_id === "") {
+      return sendError(res, 400, "user_id required");
+    }
+    const uid = Number(user_id);
+    if (!Number.isFinite(uid) || uid <= 0) {
+      return sendError(res, 400, "invalid user_id");
+    }
+
+    try {
+      const [userCheck] = await dbp.execute(
+        "SELECT id FROM users WHERE id = ? LIMIT 1",
+        [uid]
+      );
+
+      if (!userCheck.length) {
+        return sendError(res, 400, "user does not exist");
       }
-    );
+
+      const [existing] = await dbp.execute(
+        "SELECT id FROM employees WHERE user_id = ? AND store_id = ? LIMIT 1",
+        [uid, req.user.storeId]
+      );
+
+      if (existing.length) {
+        return sendError(res, 409, "user already has an employee profile in this store");
+      }
+
+      const cleanName = String(name || "").trim();
+      const cleanEmail = email == null || email === "" ? null : String(email).trim();
+      const cleanPhone = phone == null || phone === "" ? null : String(phone).trim();
+
+      if (!cleanName) {
+        return sendError(res, 400, "name required");
+      }
+
+      const [insertHeader] = await dbp.execute(
+        "INSERT INTO employees (user_id, store_id, name, email, phone, role, availability) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+          uid,
+          req.user.storeId,
+          cleanName,
+          cleanEmail,
+          cleanPhone,
+          normalizeEmployeeRole(role),
+          JSON.stringify(availability || {}),
+        ]
+      );
+      return sendData(res, { id: insertHeader.insertId });
+    } catch (err) {
+      return sendError(res, 500, err.message);
+    }
   });
 
   me.put("/employees/:id", requireStore, (req, res) => {
     const { name, email, phone, role, availability } = req.body;
 
+    const cleanName = String(name || "").trim();
+    const cleanEmail = email == null || email === "" ? null : String(email).trim();
+    const cleanPhone = phone == null || phone === "" ? null : String(phone).trim();
+
+    if (!cleanName) {
+      return sendError(res, 400, "name required");
+    }
+
     db.query(
       "UPDATE employees SET name=?, email=?, phone=?, role=?, availability=? WHERE id=? AND store_id=?",
       [
-        name,
-        email,
-        phone || null,
+        cleanName,
+        cleanEmail,
+        cleanPhone,
         normalizeEmployeeRole(role),
         JSON.stringify(availability || {}),
         req.params.id,
@@ -149,6 +196,13 @@ function registerMeSubroutes(me) {
   });
 }
 
+/**
+ * CrewPilot API — scheduling routes (store-scoped; employees as scheduling actors; revision on bulk).
+ * - Tenant: all data scoped by req.user.storeId; auth uses users.id, scheduling uses employees.id.
+ * - Shifts: canonical schedule; bulk save uses stores.shifts_revision (409 on mismatch).
+ * - Swap exclusivity: a shift cannot have an active direct swap AND pool pipeline at once.
+ * - Finalization: reassign shift, clear competing swap_requests + shift_pool, bump revision where applicable.
+ */
 function registerResourceRoutes(r) {
   r.get("/shifts", auth, requireStore, async (req, res) => {
     try {
@@ -176,13 +230,16 @@ function registerResourceRoutes(r) {
 
   r.post("/shifts", auth, requireStore, async (req, res) => {
     const { employee_id } = req.body;
-    const start_time = req.body.start_time ?? req.body.start;
-    const end_time = req.body.end_time ?? req.body.end;
+    const start_time = String(req.body.start_time ?? req.body.start ?? "").trim();
+    const end_time = String(req.body.end_time ?? req.body.end ?? "").trim();
 
     if (!employee_id) return sendError(res, 400, "employee_id required");
     if (!start_time || !end_time) {
       return sendError(res, 400, "start_time and end_time required");
     }
+    const timeErr = assertShiftEndAfterStart(start_time, end_time);
+    if (timeErr) return sendError(res, 400, timeErr);
+
     const eidPost = Number(employee_id);
     if (!Number.isFinite(eidPost) || eidPost <= 0) {
       return sendError(res, 400, "invalid employee_id");
@@ -238,8 +295,8 @@ function registerResourceRoutes(r) {
     const normalized = items.map((raw) => {
       const id = raw.id != null ? Number(raw.id) : null;
       const employee_id = Number(raw.employee_id ?? raw.employeeId);
-      const start_time = raw.start_time ?? raw.start;
-      const end_time = raw.end_time ?? raw.end;
+      const start_time = String(raw.start_time ?? raw.start ?? "").trim();
+      const end_time = String(raw.end_time ?? raw.end ?? "").trim();
       return { id, employee_id, start_time, end_time };
     });
 
@@ -340,12 +397,14 @@ function registerResourceRoutes(r) {
 
   r.put("/shifts/:id", auth, requireStore, async (req, res) => {
     const { employee_id } = req.body;
-    const start_time = req.body.start_time ?? req.body.start;
-    const end_time = req.body.end_time ?? req.body.end;
+    const start_time = String(req.body.start_time ?? req.body.start ?? "").trim();
+    const end_time = String(req.body.end_time ?? req.body.end ?? "").trim();
 
     if (!start_time || !end_time) {
       return sendError(res, 400, "start_time and end_time required");
     }
+    const timeErrPut = assertShiftEndAfterStart(start_time, end_time);
+    if (timeErrPut) return sendError(res, 400, timeErrPut);
 
     const eid =
       employee_id === undefined || employee_id === null || employee_id === ""
@@ -424,13 +483,18 @@ function registerResourceRoutes(r) {
 
     if (!shift_id) return sendError(res, 400, "shift_id required");
 
+    const sid = Number(shift_id);
+    if (!Number.isFinite(sid) || sid <= 0) {
+      return sendError(res, 400, "invalid shift_id");
+    }
+
     try {
       const created_by = req.user.employeeId;
       if (created_by == null) {
         return sendError(
           res,
           400,
-          "Account must be linked to an employee (users.employee_id) to post to the shift pool"
+          "Account must be linked to an employee profile to post to the shift pool"
         );
       }
 
@@ -447,22 +511,40 @@ function registerResourceRoutes(r) {
          INNER JOIN shifts s ON s.id = sp.shift_id AND s.store_id = ?
          WHERE sp.shift_id = ? AND sp.status IN ('posted', 'claimed')
          LIMIT 1`,
-        [req.user.storeId, shift_id]
+        [req.user.storeId, sid]
       );
       if (poolDup.length) {
         return sendError(res, 409, "this shift is already in the swap pool");
+      }
+
+      const [swapActive] = await dbp.execute(
+        `SELECT sr.id
+         FROM swap_requests sr
+         INNER JOIN shifts s ON s.id = sr.shift_id
+         WHERE sr.shift_id = ?
+         AND s.store_id = ?
+         AND sr.status IN ('pending', 'awaiting_approval')
+         LIMIT 1`,
+        [sid, req.user.storeId]
+      );
+      if (swapActive.length) {
+        return sendError(res, 409, "this shift has an active direct swap request");
       }
 
       const [result] = await dbp.query(
         `INSERT INTO shift_pool (shift_id, created_by, status)
          SELECT ?, ?, 'posted'
          FROM shifts s
-         WHERE s.id = ? AND s.store_id = ?
+         WHERE s.id = ? AND s.store_id = ? AND s.employee_id = ?
          LIMIT 1`,
-        [shift_id, created_by, shift_id, req.user.storeId]
+        [sid, created_by, sid, req.user.storeId, created_by]
       );
       if (!result.affectedRows) {
-        return sendError(res, 404, "shift not found or not in your store");
+        return sendError(
+          res,
+          404,
+          "shift not found, not in your store, or you are not the assigned employee"
+        );
       }
       return sendData(res, { id: result.insertId });
     } catch (err) {
@@ -514,10 +596,19 @@ function registerResourceRoutes(r) {
           return sendError(res, 500, "could not assign shift");
         }
         await dbp.execute(
-          `DELETE FROM swap_requests WHERE shift_id = ? AND status IN ('pending', 'awaiting_approval')`,
-          [row.shift_id]
+          `DELETE sr FROM swap_requests sr
+           INNER JOIN shifts s ON s.id = sr.shift_id
+           WHERE sr.shift_id = ?
+           AND s.store_id = ?
+           AND sr.status IN ('pending','awaiting_approval')`,
+          [row.shift_id, storeId]
         );
-        await dbp.execute("DELETE FROM shift_pool WHERE shift_id = ?", [row.shift_id]);
+        await dbp.execute(
+          `DELETE sp FROM shift_pool sp
+           INNER JOIN shifts s ON s.id = sp.shift_id
+           WHERE sp.shift_id = ? AND s.store_id = ?`,
+          [row.shift_id, storeId]
+        );
         await dbp.commit();
         await bumpShiftsRevisionForStore(storeId);
         return sendData(res, { success: true });
@@ -646,7 +737,7 @@ function registerResourceRoutes(r) {
 
     const shiftId = Number(shift_id);
     const toId = Number(to_employee_id);
-    if (!Number.isFinite(shiftId) || !Number.isFinite(toId) || toId <= 0) {
+    if (!Number.isFinite(shiftId) || shiftId <= 0 || !Number.isFinite(toId) || toId <= 0) {
       return sendError(res, 400, "invalid shift_id or to_employee_id");
     }
     if (toId === from_employee_id) {
@@ -663,8 +754,14 @@ function registerResourceRoutes(r) {
       }
 
       const [dupSwap] = await dbp.execute(
-        `SELECT id FROM swap_requests WHERE shift_id = ? AND status IN ('pending', 'awaiting_approval') LIMIT 1`,
-        [shiftId]
+        `SELECT sr.id
+         FROM swap_requests sr
+         INNER JOIN shifts s ON s.id = sr.shift_id
+         WHERE sr.shift_id = ?
+         AND s.store_id = ?
+         AND sr.status IN ('pending', 'awaiting_approval')
+         LIMIT 1`,
+        [shiftId, req.user.storeId]
       );
       if (dupSwap.length) {
         return sendError(res, 409, "an active swap request already exists for this shift");
@@ -759,11 +856,20 @@ function registerResourceRoutes(r) {
           await dbp.execute("UPDATE swap_requests SET status = 'approved' WHERE id = ?", [sid]);
 
           await dbp.execute(
-            `DELETE FROM swap_requests WHERE shift_id = ? AND status IN ('pending', 'awaiting_approval')`,
-            [swap.shift_id]
+            `DELETE sr FROM swap_requests sr
+             INNER JOIN shifts s ON s.id = sr.shift_id
+             WHERE sr.shift_id = ?
+             AND s.store_id = ?
+             AND sr.status IN ('pending','awaiting_approval')`,
+            [swap.shift_id, storeId]
           );
 
-          await dbp.execute("DELETE FROM shift_pool WHERE shift_id = ?", [swap.shift_id]);
+          await dbp.execute(
+            `DELETE sp FROM shift_pool sp
+             INNER JOIN shifts s ON s.id = sp.shift_id
+             WHERE sp.shift_id = ? AND s.store_id = ?`,
+            [swap.shift_id, storeId]
+          );
 
           await dbp.commit();
           await bumpShiftsRevisionForStore(storeId);
@@ -845,27 +951,39 @@ async function auth(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const userId = Number(decoded.userId);
+    const userId = Number(decoded.userId ?? decoded.id);
     if (!Number.isFinite(userId) || userId <= 0) {
       return sendError(res, 401, "Invalid token payload");
     }
+    const storeId = Number(req.headers["x-store-id"]);
+
+    if (!Number.isFinite(storeId) || storeId <= 0) {
+      return sendError(res, 400, "store_id required");
+    }
+
     const [rows] = await dbp.execute(
-      `SELECT sm.store_id, sm.role, u.employee_id
+      `SELECT 
+         sm.store_id,
+         sm.role,
+         e.id AS employee_id
        FROM store_members sm
-       INNER JOIN users u ON u.id = sm.user_id
-       WHERE sm.user_id = ?
+       LEFT JOIN employees e
+         ON e.user_id = sm.user_id 
+         AND e.store_id = sm.store_id
+       WHERE sm.user_id = ? AND sm.store_id = ?
        LIMIT 1`,
-      [userId]
+      [userId, storeId]
     );
-    const row = rows[0];
+
+    if (!rows.length) {
+      return sendError(res, 403, "not a member of this store");
+    }
+
     req.user = {
-      id: Number(userId),
-      storeId: row?.store_id || null,
-      role: row?.role || null,
-      employeeId:
-        row?.employee_id != null && Number.isFinite(Number(row.employee_id))
-          ? Number(row.employee_id)
-          : null,
+      id: userId,
+      storeId,
+      role: rows[0].role,
+      employeeId: rows[0].employee_id || null,
     };
     next();
   } catch (err) {
@@ -888,17 +1006,29 @@ async function bumpShiftsRevisionForStore(storeId) {
 }
 
 /** @returns {string|null} error message or null if ok */
+function assertShiftEndAfterStart(start_time, end_time) {
+  const s = new Date(start_time).getTime();
+  const e = new Date(end_time).getTime();
+  if (!Number.isFinite(s) || !Number.isFinite(e)) {
+    return "invalid shift times";
+  }
+  if (e <= s) {
+    return "end_time must be after start_time";
+  }
+  return null;
+}
+
+/** @returns {string|null} error message or null if ok */
 function assertNoEmployeeShiftOverlaps(normalized) {
+  for (const r of normalized) {
+    const te = assertShiftEndAfterStart(r.start_time, r.end_time);
+    if (te) return te;
+  }
   const intervals = normalized.map((r) => {
     const start = new Date(r.start_time).getTime();
     const end = new Date(r.end_time).getTime();
     return { eid: r.employee_id, start, end };
   });
-  for (const iv of intervals) {
-    if (!Number.isFinite(iv.start) || !Number.isFinite(iv.end) || iv.end <= iv.start) {
-      return "invalid shift time range";
-    }
-  }
   for (let i = 0; i < intervals.length; i++) {
     for (let j = i + 1; j < intervals.length; j++) {
       if (intervals[i].eid !== intervals[j].eid) continue;
@@ -910,9 +1040,56 @@ function assertNoEmployeeShiftOverlaps(normalized) {
   return null;
 }
 
+const PORT = process.env.PORT || 3000;
+let httpServerStarted = false;
+function startHttpServer() {
+  if (httpServerStarted) return;
+  httpServerStarted = true;
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+async function runStartupMigrations() {
+  async function tryAlter(sql) {
+    try {
+      await dbp.query(sql);
+    } catch (e) {
+      if (e.errno === 1060 || e.errno === 1061 || e.errno === 1826) return;
+      if (e.errno === 1062) {
+        console.warn("Migration skipped (duplicate values):", sql.slice(0, 80), e.message);
+        return;
+      }
+      console.error("Migration failed:", sql.slice(0, 100), e.message);
+    }
+  }
+
+  await tryAlter("ALTER TABLE employees ADD COLUMN user_id INT NULL");
+  try {
+    await dbp.query("ALTER TABLE stores DROP INDEX uq_stores_name");
+  } catch (e) {
+    if (e.errno !== 1091) {
+      console.warn("Could not drop stores.uq_stores_name (if absent):", e.message);
+    }
+  }
+  await tryAlter(
+    "ALTER TABLE employees ADD UNIQUE KEY uq_employees_user_store (user_id, store_id)"
+  );
+  try {
+    await dbp.query(
+      "ALTER TABLE employees ADD CONSTRAINT fk_employees_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+    );
+  } catch (e) {
+    if (e.errno !== 1826 && e.errno !== 1061 && e.errno !== 1215 && e.errno !== 1452) {
+      console.error("Could not add employees.user_id FK:", e.message);
+    }
+  }
+}
+
 db.connect((err) => {
   if (err) {
     console.error("DB connection failed:", err);
+    startHttpServer();
     return;
   }
   console.log("Connected to MySQL");
@@ -948,55 +1125,79 @@ db.connect((err) => {
       }
     }
   );
+  runStartupMigrations()
+    .then(() => startHttpServer())
+    .catch((migrationErr) => {
+      console.error("Startup migrations:", migrationErr);
+      startHttpServer();
+    });
 });
-
 
 // =========================
 // AUTH
 // =========================
 async function loginHandler(req, res) {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return sendError(res, 400, "username and password are required");
+  const username = String(req.body?.username || "").trim();
+  const password = String(req.body?.password || "");
+  const storeName = String(req.body?.storeName || "").trim();
+
+  if (!username || !password || !storeName) {
+    return sendError(res, 400, "username, password, and storeName required");
   }
 
   try {
-    const [results] = await dbp.execute("SELECT * FROM users WHERE username=?", [
-      username,
-    ]);
-    if (!results || results.length === 0) {
-      return sendError(res, 401, "Invalid credentials");
-    }
+    const [users] = await dbp.execute(
+      "SELECT * FROM users WHERE username = ? LIMIT 1",
+      [username]
+    );
 
-    const user = results[0];
+    if (!users.length) return sendError(res, 401, "invalid credentials");
+
+    const user = users[0];
     const storedPassword = String(user.password || "");
     let passwordOk = false;
     if (storedPassword.startsWith("$2")) {
       passwordOk = await bcrypt.compare(password, storedPassword);
     } else {
-      // Backward-compatible fallback for pre-hash users.
       passwordOk = storedPassword === password;
       if (passwordOk) {
         const upgradedHash = await bcrypt.hash(password, 10);
-        await dbp.execute("UPDATE users SET password=? WHERE id=?", [
-          upgradedHash,
-          user.id,
-        ]);
+        await dbp.execute("UPDATE users SET password=? WHERE id=?", [upgradedHash, user.id]);
       }
     }
     if (!passwordOk) {
-      return sendError(res, 401, "Invalid credentials");
+      return sendError(res, 401, "invalid credentials");
     }
 
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
-      expiresIn: "7d",
-    });
+    const [rows] = await dbp.execute(
+      `SELECT 
+         s.id AS store_id,
+         sm.role,
+         e.id AS employee_id
+       FROM stores s
+       JOIN store_members sm 
+         ON sm.store_id = s.id
+       LEFT JOIN employees e 
+         ON e.user_id = sm.user_id 
+         AND e.store_id = sm.store_id
+       WHERE sm.user_id = ? AND s.name = ?
+       LIMIT 1`,
+      [user.id, storeName]
+    );
+
+    if (!rows.length) {
+      return sendError(res, 403, "not a member of that store");
+    }
+
+    const row = rows[0];
+
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "7d" });
 
     return sendData(res, {
       token,
-      userId: user.id,
-      id: user.id,
-      username: user.username,
+      storeId: row.store_id,
+      role: row.role,
+      employeeId: row.employee_id,
     });
   } catch (err) {
     return sendError(res, 500, "login failed");
@@ -1004,23 +1205,26 @@ async function loginHandler(req, res) {
 }
 
 async function createStoreHandler(req, res) {
-  const { username, password, storeName } = req.body || {};
+  const username = String(req.body?.username || "").trim();
+  const password = String(req.body?.password || "");
+  const storeName = String(req.body?.storeName || "").trim();
 
   if (!username || !password || !storeName) {
     return sendError(res, 400, "username, password, and storeName are required");
   }
 
   try {
-    // 1. create user (users.role satisfies NOT NULL only — canonical role is store_members.role)
+    await dbp.beginTransaction();
+
     const hashedPassword = await bcrypt.hash(password, 10);
+
     const [userResult] = await dbp.query(
-      "INSERT INTO users (username, password, role) VALUES (?, ?, 'owner')",
+      "INSERT INTO users (username, password) VALUES (?, ?)",
       [username, hashedPassword]
     );
 
     const userId = userResult.insertId;
 
-    // 2. create store
     const [storeResult] = await dbp.query(
       "INSERT INTO stores (name) VALUES (?)",
       [storeName]
@@ -1028,24 +1232,29 @@ async function createStoreHandler(req, res) {
 
     const storeId = storeResult.insertId;
 
-    // 3. link user -> store
     await dbp.query(
       "INSERT INTO store_members (user_id, store_id, role) VALUES (?, ?, 'owner')",
       [userId, storeId]
     );
 
-    // 4. owner employee row + link user (shift pool / FKs use users.employee_id)
-    const [empResult] = await dbp.query(
-      "INSERT INTO employees (store_id, name, role, availability) VALUES (?, ?, 'owner', ?)",
-      [storeId, username, JSON.stringify({})]
+    const [empInsert] = await dbp.execute(
+      "INSERT INTO employees (user_id, store_id, name, role, availability) VALUES (?, ?, ?, 'owner', ?)",
+      [userId, storeId, username, JSON.stringify({})]
     );
-    await dbp.query("UPDATE users SET employee_id=? WHERE id=?", [empResult.insertId, userId]);
 
-    const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: "7d" });
+    await dbp.commit();
 
-    // 5. return success and token for immediate sign-in
-    return sendData(res, { success: true, userId, storeId, token });
+    const token = jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: "7d" });
+
+    return sendData(res, {
+      success: true,
+      userId,
+      storeId,
+      token,
+      employeeId: empInsert.insertId,
+    });
   } catch (err) {
+    await dbp.rollback();
     console.error("CREATE STORE ERROR:", err);
     return sendError(res, 500, err.message);
   }
@@ -1054,8 +1263,8 @@ async function createStoreHandler(req, res) {
 // =========================
 // API v1 (mounted router)
 // =========================
-v1Router.post("/auth/login", loginHandler);
-v1Router.post("/auth/register", createStoreHandler);
+v1Router.post("/auth/login", authLimiter, loginHandler);
+v1Router.post("/auth/register", authLimiter, createStoreHandler);
 v1Router.get("/health", (req, res) => sendData(res, { status: "ok" }));
 
 const meV1 = express.Router();
@@ -1070,10 +1279,10 @@ app.use("/api/v1", v1Router);
 // =========================
 // Legacy (non-versioned) aliases
 // =========================
-app.post("/login", loginHandler);
-app.post("/create-store", createStoreHandler);
-app.post("/auth/login", loginHandler);
-app.post("/auth/register", createStoreHandler);
+app.post("/login", authLimiter, loginHandler);
+app.post("/create-store", authLimiter, createStoreHandler);
+app.post("/auth/login", authLimiter, loginHandler);
+app.post("/auth/register", authLimiter, createStoreHandler);
 app.get("/health", (req, res) => sendData(res, { status: "ok" }));
 
 const meLegacy = express.Router();
@@ -1084,9 +1293,5 @@ app.use("/me", meLegacy);
 // Resource routes live only under /api/v1 (see registerResourceRoutes(v1Router) above).
 
 // =========================
-// SERVER
+// SERVER (listen starts from db.connect after schema checks)
 // =========================
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
