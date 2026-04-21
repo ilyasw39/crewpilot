@@ -100,39 +100,38 @@ function registerMeSubroutes(me) {
   me.post("/employees", requireStore, async (req, res) => {
     const { user_id, name, email, phone, role, availability } = req.body;
 
-    if (user_id === undefined || user_id === null || user_id === "") {
-      return sendError(res, 400, "user_id required");
+    const cleanName = String(name || "").trim();
+    const cleanEmail = email == null || email === "" ? null : String(email).trim();
+    const cleanPhone = phone == null || phone === "" ? null : String(phone).trim();
+
+    if (!cleanName) {
+      return sendError(res, 400, "name required");
     }
-    const uid = Number(user_id);
-    if (!Number.isFinite(uid) || uid <= 0) {
-      return sendError(res, 400, "invalid user_id");
-    }
+
+    let uid = null;
 
     try {
-      const [userCheck] = await dbp.execute(
-        "SELECT id FROM users WHERE id = ? LIMIT 1",
-        [uid]
-      );
+      if (!(user_id === undefined || user_id === null || user_id === "")) {
+        uid = Number(user_id);
+        if (!Number.isFinite(uid) || uid <= 0) {
+          return sendError(res, 400, "invalid user_id");
+        }
 
-      if (!userCheck.length) {
-        return sendError(res, 400, "user does not exist");
-      }
+        const [userCheck] = await dbp.execute(
+          "SELECT id FROM users WHERE id = ? LIMIT 1",
+          [uid]
+        );
+        if (!userCheck.length) {
+          return sendError(res, 400, "user does not exist");
+        }
 
-      const [existing] = await dbp.execute(
-        "SELECT id FROM employees WHERE user_id = ? AND store_id = ? LIMIT 1",
-        [uid, req.user.storeId]
-      );
-
-      if (existing.length) {
-        return sendError(res, 409, "user already has an employee profile in this store");
-      }
-
-      const cleanName = String(name || "").trim();
-      const cleanEmail = email == null || email === "" ? null : String(email).trim();
-      const cleanPhone = phone == null || phone === "" ? null : String(phone).trim();
-
-      if (!cleanName) {
-        return sendError(res, 400, "name required");
+        const [existing] = await dbp.execute(
+          "SELECT id FROM employees WHERE user_id = ? AND store_id = ? LIMIT 1",
+          [uid, req.user.storeId]
+        );
+        if (existing.length) {
+          return sendError(res, 409, "user already has an employee profile in this store");
+        }
       }
 
       const [insertHeader] = await dbp.execute(
@@ -1065,23 +1064,12 @@ async function runStartupMigrations() {
   }
 
   await tryAlter("ALTER TABLE employees ADD COLUMN user_id INT NULL");
+  await tryAlter("ALTER TABLE employees MODIFY COLUMN user_id INT NULL");
   try {
     await dbp.query("ALTER TABLE stores DROP INDEX uq_stores_name");
   } catch (e) {
     if (e.errno !== 1091) {
       console.warn("Could not drop stores.uq_stores_name (if absent):", e.message);
-    }
-  }
-  await tryAlter(
-    "ALTER TABLE employees ADD UNIQUE KEY uq_employees_user_store (user_id, store_id)"
-  );
-  try {
-    await dbp.query(
-      "ALTER TABLE employees ADD CONSTRAINT fk_employees_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
-    );
-  } catch (e) {
-    if (e.errno !== 1826 && e.errno !== 1061 && e.errno !== 1215 && e.errno !== 1452) {
-      console.error("Could not add employees.user_id FK:", e.message);
     }
   }
 }

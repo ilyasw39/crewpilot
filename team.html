@@ -710,14 +710,6 @@
           <button class="close-popup" onclick="closepopup()">&times;</button>
           <h3><i class="fas fa-user-plus"></i> Add New Employee</h3>
           <form id="addEmployeeForm">
-            <input
-              type="number"
-              id="empUserId"
-              placeholder="Linked account user ID"
-              min="1"
-              step="1"
-              required
-            />
             <input type="text" id="empName" placeholder="Full Name" required />
             <select id="empRole" required>
               <option value="">Select Role</option>
@@ -1010,7 +1002,6 @@
         .addEventListener("submit", async function (e) {
           e.preventDefault();
 
-          const user_id = Number(document.getElementById("empUserId").value);
           const name = document.getElementById("empName").value;
           const role = document.getElementById("empRole").value;
           const email = document.getElementById("empEmail").value;
@@ -1023,7 +1014,6 @@
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              user_id,
               name,
               email,
               phone,
